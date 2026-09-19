@@ -54,10 +54,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         file.originalName.endsWith('.js') ||
         file.originalName.endsWith('.ts'));
 
+    const token = localStorage.getItem('cloudvault_token');
     if (isTextReadable) {
       setLoadingText(true);
-      fetch(`/api/files/raw/${encodeURIComponent(file.storageKey)}`)
-        .then((res) => res.text())
+      const url = `/api/files/raw/${encodeURIComponent(file.storageKey)}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+      fetch(url, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error('Preview fetch failed');
+          return res.text();
+        })
         .then((text) => {
           setTextContent(text);
           setLoadingText(false);
@@ -73,7 +80,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
   if (!file) return null;
 
-  const rawUrl = `/api/files/raw/${encodeURIComponent(file.storageKey)}`;
+  const token = localStorage.getItem('cloudvault_token');
+  const rawUrl = `/api/files/raw/${encodeURIComponent(file.storageKey)}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 
   const renderPreviewContent = () => {
     if (file.category === 'image') {
@@ -94,7 +102,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           <iframe
             src={rawUrl}
             title={file.originalName}
-            className="w-full h-full rounded-xl border border-vault-border dark:border-vault-darkBorder"
+            className="w-full h-full rounded-xl border border-vault-border dark:border-vault-darkBorder bg-white"
           />
         </div>
       );

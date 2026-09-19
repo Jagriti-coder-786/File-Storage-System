@@ -126,7 +126,7 @@ export const FileCard: React.FC<FileCardProps> = ({
       >
         {file.category === 'image' && file.mimeType !== 'image/svg+xml' ? (
           <img
-            src={`/api/files/raw/${encodeURIComponent(file.storageKey)}`}
+            src={`/api/files/raw/${encodeURIComponent(file.storageKey)}${localStorage.getItem('cloudvault_token') ? `?token=${encodeURIComponent(localStorage.getItem('cloudvault_token')!)}` : ''}`}
             alt={file.originalName}
             className="w-full h-full object-cover"
             loading="lazy"

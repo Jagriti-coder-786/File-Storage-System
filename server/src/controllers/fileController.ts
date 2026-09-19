@@ -256,20 +256,30 @@ export const serveRawFile = async (req: AuthRequest, res: Response, next: NextFu
       throw new AppError('File not found.', 404, 'FILE_NOT_FOUND');
     }
 
-    // Check authorization: header token, query token, or public share
+    // Check authorization:
     let isAuthorized = false;
 
-    if (req.user && req.user.userId === file.ownerId.toString()) {
-      isAuthorized = true;
-    } else if (req.query.token && typeof req.query.token === 'string') {
+    let authToken = typeof req.query.token === 'string' ? req.query.token : undefined;
+    if (!authToken && req.headers.authorization) {
+      const parts = req.headers.authorization.split(' ');
+      if (parts.length === 2 && parts[0] === 'Bearer') {
+        authToken = parts[1];
+      }
+    }
+
+    if (authToken) {
       try {
-        const payload = verifyToken(req.query.token);
-        if (payload.userId === file.ownerId.toString()) {
+        const payload = verifyToken(authToken);
+        if (payload.userId === file.ownerId.toString() || payload.role === 'ADMIN') {
           isAuthorized = true;
         }
       } catch {
-        // invalid query token
+        // invalid token
       }
+    }
+
+    if (req.user && (req.user.userId === file.ownerId.toString() || req.user.role === 'ADMIN')) {
+      isAuthorized = true;
     }
 
     const isPublic = file.shareEnabled && (!file.shareExpiresAt || file.shareExpiresAt > new Date());
