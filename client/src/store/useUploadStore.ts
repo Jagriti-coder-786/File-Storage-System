@@ -5,7 +5,7 @@ interface UploadStore {
   queue: UploadQueueItem[];
   isUploading: boolean;
   isOpen: boolean;
-  addToQueue: (files: File[], folderId?: string | null) => void;
+  addToQueue: (files: File[], folderId?: string | null) => UploadQueueItem[];
   updateProgress: (id: string, progress: number) => void;
   setStatus: (id: string, status: UploadQueueItem['status'], error?: string) => void;
   removeFromQueue: (id: string) => void;
@@ -29,6 +29,7 @@ export const useUploadStore = create<UploadStore>((set) => ({
       queue: [...state.queue, ...newItems],
       isOpen: true,
     }));
+    return newItems;
   },
   updateProgress: (id, progress) =>
     set((state) => ({

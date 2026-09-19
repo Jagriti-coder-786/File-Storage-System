@@ -7,6 +7,7 @@ import { UploadDropzoneOverlay } from '../components/common/UploadDropzoneOverla
 import { UploadQueueWidget } from '../components/common/UploadQueueWidget';
 import { CreateFolderModal } from '../components/modals/CreateFolderModal';
 import { useUploadStore } from '../store/useUploadStore';
+import { useViewStore } from '../store/useViewStore';
 import { fileApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -73,32 +74,30 @@ export const AppLayout: React.FC = () => {
     const searchParams = new URLSearchParams(location.search);
     const currentFolderId = searchParams.get('folder');
 
-    addToQueue(files, currentFolderId);
+    const newItems = addToQueue(files, currentFolderId);
 
-    for (const file of files) {
-      const queueItem = queue.find((q) => q.file === file);
-      const itemId = queueItem ? queueItem.id : `${file.name}-${Date.now()}`;
-
+    for (const item of newItems) {
       const formData = new FormData();
-      formData.append('files', file);
+      formData.append('files', item.file);
       if (currentFolderId) {
         formData.append('folderId', currentFolderId);
       }
 
-      setStatus(itemId, 'uploading');
+      setStatus(item.id, 'uploading');
 
       try {
         await fileApi.upload(formData, (progress) => {
-          updateProgress(itemId, progress);
+          updateProgress(item.id, progress);
         });
 
-        setStatus(itemId, 'completed');
-        success(`Uploaded ${file.name}`);
+        setStatus(item.id, 'completed');
+        success(`Uploaded ${item.file.name}`);
         refreshUser();
+        useViewStore.getState().triggerRefresh();
       } catch (err: any) {
-        const errorMsg = err.response?.data?.message || 'Upload failed.';
-        setStatus(itemId, 'error', errorMsg);
-        error(`Failed to upload ${file.name}: ${errorMsg}`);
+        const errorMsg = err.response?.data?.message || err.message || 'Upload failed.';
+        setStatus(item.id, 'error', errorMsg);
+        error(`Failed to upload ${item.file.name}: ${errorMsg}`);
       }
     }
   };

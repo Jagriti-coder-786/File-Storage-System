@@ -39,6 +39,7 @@ export const MyFilesPage: React.FC = () => {
     setSortBy,
     sortOrder,
     setSortOrder,
+    refreshVersion,
   } = useViewStore();
 
   const [folders, setFolders] = useState<FolderItem[]>([]);
@@ -93,7 +94,7 @@ export const MyFilesPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [folderId, searchQuery, categoryFilter, sortBy, sortOrder]);
+  }, [folderId, searchQuery, categoryFilter, sortBy, sortOrder, refreshVersion]);
 
   useEffect(() => {
     loadData();

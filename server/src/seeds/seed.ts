@@ -39,15 +39,17 @@ const seedDatabase = async () => {
       const salt = await bcrypt.genSalt(12);
       const passwordHash = await bcrypt.hash('Password123!', salt);
       demoUser = await User.create({
-        name: 'Alex Mercer',
+        name: 'Ruhi',
         email: 'user@cloudvault.io',
         passwordHash,
         role: 'USER',
         storageQuota: 1024 * 1024 * 1024, // 1 GB
       });
-      console.log('👤 Demo user created: user@cloudvault.io / Password123!');
+      console.log('👤 Demo user created: Ruhi (user@cloudvault.io / Password123!)');
     } else {
-      console.log('👤 Demo user already exists: user@cloudvault.io');
+      demoUser.name = 'Ruhi';
+      await demoUser.save();
+      console.log('👤 Demo user updated to Ruhi: user@cloudvault.io');
     }
 
     // 3. Create Sample Folders for Demo User if none exist

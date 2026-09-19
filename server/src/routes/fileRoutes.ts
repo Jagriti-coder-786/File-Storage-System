@@ -20,7 +20,7 @@ import { uploadMiddleware } from '../middleware/upload';
 const router = Router();
 
 // Public / Semi-public raw streaming for preview / authenticated files
-router.get('/raw/:key', serveRawFile);
+router.get('/raw/:key(*)', serveRawFile);
 
 // Authenticated routes
 router.use(authenticateJwt);

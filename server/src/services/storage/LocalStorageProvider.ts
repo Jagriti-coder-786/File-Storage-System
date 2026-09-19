@@ -15,13 +15,21 @@ export class LocalStorageProvider implements IStorageProvider {
   }
 
   private getFilePath(key: string): string {
-    // Sanitize key to prevent directory traversal
-    const safeKey = path.basename(key);
-    return path.join(this.baseDir, safeKey);
+    // Sanitize key to prevent directory traversal outside baseDir
+    const sanitizedKey = key.replace(/\\/g, '/').replace(/\.\./g, '').replace(/^\/+/, '');
+    const targetPath = path.resolve(this.baseDir, sanitizedKey);
+    if (!targetPath.startsWith(this.baseDir)) {
+      return path.join(this.baseDir, path.basename(sanitizedKey));
+    }
+    return targetPath;
   }
 
   async upload(key: string, data: Buffer | Readable, mimeType: string): Promise<UploadResult> {
     const targetPath = this.getFilePath(key);
+    const parentDir = path.dirname(targetPath);
+    if (!fs.existsSync(parentDir)) {
+      await fs.promises.mkdir(parentDir, { recursive: true });
+    }
 
     if (Buffer.isBuffer(data)) {
       await fs.promises.writeFile(targetPath, data);

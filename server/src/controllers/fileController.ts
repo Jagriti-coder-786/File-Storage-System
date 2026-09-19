@@ -52,49 +52,70 @@ export const uploadFiles = async (req: AuthRequest, res: Response, next: NextFun
       );
     }
 
-    const createdFiles = [];
+    const createdFiles: any[] = [];
+    const uploadedKeys: string[] = [];
 
-    for (const file of files) {
-      const cleanName = sanitizeFilename(Buffer.from(file.originalname, 'latin1').toString('utf8'));
-      const ext = path.extname(cleanName);
-      const storageKey = `${userId}/${uuidv4()}${ext}`;
-      const category = getFileCategory(file.mimetype, cleanName);
+    try {
+      for (const file of files) {
+        let cleanName = file.originalname;
+        try {
+          cleanName = sanitizeFilename(Buffer.from(file.originalname, 'latin1').toString('utf8'));
+        } catch {
+          cleanName = sanitizeFilename(file.originalname);
+        }
+        if (!cleanName || cleanName.trim() === '') {
+          cleanName = `file-${Date.now()}`;
+        }
+        const ext = path.extname(cleanName);
+        const storageKey = `${userId}/${uuidv4()}${ext}`;
+        const category = getFileCategory(file.mimetype, cleanName);
 
-      // Upload file to active storage provider
-      await storageProvider.upload(storageKey, file.buffer, file.mimetype);
+        // Upload file to active storage provider
+        await storageProvider.upload(storageKey, file.buffer, file.mimetype || 'application/octet-stream');
+        uploadedKeys.push(storageKey);
 
-      const newFile = await File.create({
-        ownerId: userId,
-        folderId: folderId ? new mongoose.Types.ObjectId(folderId) : null,
-        originalName: cleanName,
-        storedName: path.basename(storageKey),
-        mimeType: file.mimetype,
-        size: file.size,
-        storageKey,
-        category,
+        const newFile = await File.create({
+          ownerId: userId,
+          folderId: folderId ? new mongoose.Types.ObjectId(folderId) : null,
+          originalName: cleanName,
+          storedName: path.basename(storageKey),
+          mimeType: file.mimetype || 'application/octet-stream',
+          size: file.size,
+          storageKey,
+          category,
+        });
+
+        createdFiles.push(newFile);
+
+        await Activity.create({
+          ownerId: userId,
+          action: 'UPLOAD',
+          targetType: 'file',
+          targetId: newFile._id,
+          targetName: newFile.originalName,
+          metadata: { size: newFile.size, mimeType: newFile.mimeType },
+        });
+      }
+
+      // Update user's used storage
+      user.storageUsed += totalBatchSize;
+      await user.save();
+
+      res.status(201).json({
+        success: true,
+        message: `${createdFiles.length} file(s) uploaded successfully.`,
+        data: createdFiles,
       });
-
-      createdFiles.push(newFile);
-
-      await Activity.create({
-        ownerId: userId,
-        action: 'UPLOAD',
-        targetType: 'file',
-        targetId: newFile._id,
-        targetName: newFile.originalName,
-        metadata: { size: newFile.size, mimeType: newFile.mimeType },
-      });
+    } catch (batchErr) {
+      // Rollback uploaded files in this failed batch
+      for (const key of uploadedKeys) {
+        await storageProvider.delete(key).catch(() => {});
+      }
+      for (const f of createdFiles) {
+        await File.deleteOne({ _id: f._id }).catch(() => {});
+      }
+      throw batchErr;
     }
-
-    // Update user's used storage
-    user.storageUsed += totalBatchSize;
-    await user.save();
-
-    res.status(201).json({
-      success: true,
-      message: `${createdFiles.length} file(s) uploaded successfully.`,
-      data: createdFiles,
-    });
   } catch (error) {
     next(error);
   }

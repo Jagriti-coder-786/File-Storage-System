@@ -14,6 +14,8 @@ interface ViewStore {
   setSortOrder: (order: 'asc' | 'desc') => void;
   isCommandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
+  refreshVersion: number;
+  triggerRefresh: () => void;
 }
 
 const savedViewMode = (localStorage.getItem('cloudvault_view_mode') as 'grid' | 'list') || 'grid';
@@ -34,4 +36,6 @@ export const useViewStore = create<ViewStore>((set) => ({
   setSortOrder: (sortOrder) => set({ sortOrder }),
   isCommandPaletteOpen: false,
   setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
+  refreshVersion: 0,
+  triggerRefresh: () => set((state) => ({ refreshVersion: state.refreshVersion + 1 })),
 }));
