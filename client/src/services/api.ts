@@ -1,7 +1,16 @@
 import axios from 'axios';
 import { User, FileItem, FolderItem, StorageSummary, ActivityItem } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api';
+// Safely normalize base URL for development and production (e.g. Render backend)
+let rawBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
+if (rawBaseUrl.endsWith('/')) {
+  rawBaseUrl = rawBaseUrl.slice(0, -1);
+}
+if (rawBaseUrl.startsWith('http') && !rawBaseUrl.endsWith('/api')) {
+  rawBaseUrl = `${rawBaseUrl}/api`;
+}
+
+const API_BASE_URL = rawBaseUrl;
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

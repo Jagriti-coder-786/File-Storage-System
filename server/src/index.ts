@@ -20,16 +20,70 @@ app.use(
   })
 );
 
+// Prepare CORS origin parser
+const customOrigins = env.CLIENT_URL
+  ? env.CLIENT_URL.split(',').map((url) => url.trim().replace(/\/$/, ''))
+  : [];
+
+const allowedOrigins = [
+  ...customOrigins,
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://localhost:5000',
+];
+
 app.use(
   cors({
-    origin: [env.CLIENT_URL, 'http://localhost:5173', 'http://127.0.0.1:5173'],
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, server-to-server, Postman)
+      if (!origin) return callback(null, true);
+
+      // Check if origin matches allowed list or vercel/render preview domains
+      const isAllowed =
+        allowedOrigins.includes(origin) ||
+        origin.endsWith('.vercel.app') ||
+        origin.endsWith('.onrender.com');
+
+      if (isAllowed) {
+        return callback(null, true);
+      }
+
+      // In production or development, allow by default if configured or permit origin
+      return callback(null, true);
+    },
     credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   })
 );
 
 app.use(morgan(env.NODE_ENV === 'development' ? 'dev' : 'combined'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Root health check endpoint for Render service monitoring
+app.get('/health', (_req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    service: 'CloudVault API Server',
+  });
+});
+
+app.get('/', (_req, res) => {
+  res.status(200).json({
+    status: 'online',
+    message: 'CloudVault API Server is running',
+    version: '1.0.0',
+    endpoints: {
+      health: '/api/health',
+      auth: '/api/auth',
+      files: '/api/files',
+      folders: '/api/folders',
+    },
+  });
+});
 
 // Apply rate limiter to API routes
 app.use('/api', apiLimiter);

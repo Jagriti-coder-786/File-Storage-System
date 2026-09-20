@@ -12,4 +12,16 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          vendor: ['react', 'react-dom', 'react-router-dom', 'axios', 'zustand'],
+          ui: ['lucide-react', 'clsx', 'tailwind-merge', 'framer-motion'],
+          charts: ['recharts'],
+        },
+      },
+    },
+  },
 });
