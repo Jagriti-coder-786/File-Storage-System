@@ -33,6 +33,25 @@ const ProtectedRoute: React.FC<{ children: React.ReactElement }> = ({ children }
   return children;
 };
 
+const PublicOnlyRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
+  const { user, token, isLoading } = useAuth();
+
+  // If user is already authenticated on this device, instantly send them to their files
+  if (token || user) {
+    return <Navigate to="/files" replace />;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-vault-bg dark:bg-vault-darkBg">
+        <Loader2 className="w-8 h-8 text-vault-yellow animate-spin" />
+      </div>
+    );
+  }
+
+  return children;
+};
+
 const AdminRoute: React.FC<{ children: React.ReactElement }> = ({ children }) => {
   const { user, isLoading } = useAuth();
 
@@ -55,10 +74,31 @@ export const App: React.FC = () => {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public Marketing & Auth routes */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
+        {/* Public Marketing & Auth routes - Auto-redirect logged in users to /files */}
+        <Route
+          path="/"
+          element={
+            <PublicOnlyRoute>
+              <LandingPage />
+            </PublicOnlyRoute>
+          }
+        />
+        <Route
+          path="/login"
+          element={
+            <PublicOnlyRoute>
+              <LoginPage />
+            </PublicOnlyRoute>
+          }
+        />
+        <Route
+          path="/register"
+          element={
+            <PublicOnlyRoute>
+              <RegisterPage />
+            </PublicOnlyRoute>
+          }
+        />
         <Route path="/share/:token" element={<PublicSharePage />} />
 
         {/* Authenticated Application routes */}
