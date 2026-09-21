@@ -10,6 +10,9 @@ import {
   Shield,
   HardDrive,
   Sparkles,
+  X,
+  UploadCloud,
+  FolderPlus,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { formatBytes } from '../../utils/format';
@@ -17,9 +20,20 @@ import { formatBytes } from '../../utils/format';
 interface SidebarProps {
   className?: string;
   onItemClick?: () => void;
+  showCloseButton?: boolean;
+  onClose?: () => void;
+  onOpenUpload?: () => void;
+  onOpenNewFolder?: () => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ className = '', onItemClick }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+  className = '',
+  onItemClick,
+  showCloseButton = false,
+  onClose,
+  onOpenUpload,
+  onOpenNewFolder,
+}) => {
   const { user } = useAuth();
 
   const navItems = [
@@ -37,10 +51,61 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '', onItemClick })
 
   return (
     <aside
-      className={`w-64 flex flex-col justify-between h-[calc(100vh-4rem)] p-4 bg-vault-surface dark:bg-vault-darkSurface border-r border-vault-border dark:border-vault-darkBorder select-none ${className}`}
+      className={`w-64 flex flex-col justify-between p-4 bg-vault-surface dark:bg-vault-darkSurface border-r border-vault-border dark:border-vault-darkBorder select-none overflow-y-auto ${className}`}
     >
-      {/* Navigation links */}
-      <div className="space-y-6">
+      <div className="space-y-5">
+        {/* Mobile Header with brand & close button if showCloseButton is true */}
+        {showCloseButton && (
+          <div className="flex items-center justify-between pb-3 mb-2 border-b border-vault-border dark:border-vault-darkBorder">
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-vault-yellow text-black font-black text-base shadow-sm">
+                <span>⚡</span>
+              </div>
+              <span className="font-extrabold text-base tracking-tight text-vault-textPrimary dark:text-vault-darkText">
+                Cloud<span className="text-vault-yellowDark dark:text-vault-yellow">Vault</span>
+              </span>
+            </div>
+            <button
+              onClick={onClose}
+              aria-label="Close menu"
+              className="p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-vault-darkSurfaceElevated text-vault-textSecondary dark:text-vault-darkMuted hover:text-vault-textPrimary transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        )}
+
+        {/* Quick action buttons on mobile */}
+        {(onOpenUpload || onOpenNewFolder) && (
+          <div className="grid grid-cols-2 gap-2 pb-1">
+            {onOpenUpload && (
+              <button
+                onClick={() => {
+                  onItemClick?.();
+                  onOpenUpload();
+                }}
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl bg-vault-yellow hover:bg-vault-yellowHover text-black text-xs font-bold shadow-subtle transition-transform active:scale-95"
+              >
+                <UploadCloud className="w-4 h-4 stroke-[2.2]" />
+                <span>Upload</span>
+              </button>
+            )}
+            {onOpenNewFolder && (
+              <button
+                onClick={() => {
+                  onItemClick?.();
+                  onOpenNewFolder();
+                }}
+                className="flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl border border-vault-border dark:border-vault-darkBorder bg-vault-bg dark:bg-vault-darkBg hover:bg-neutral-100 dark:hover:bg-vault-darkSurfaceElevated text-vault-textPrimary dark:text-vault-darkText text-xs font-semibold transition-colors"
+              >
+                <FolderPlus className="w-4 h-4 text-vault-yellowDark dark:text-vault-yellow" />
+                <span>New Folder</span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Main Navigation Links */}
         <div>
           <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-vault-textSecondary dark:text-vault-darkMuted mb-2">
             Workspace
@@ -69,6 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '', onItemClick })
           </nav>
         </div>
 
+        {/* Admin Portal link for admin users */}
         {user?.role === 'ADMIN' && (
           <div>
             <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-vault-textSecondary dark:text-vault-darkMuted mb-2">
@@ -92,8 +158,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '', onItemClick })
         )}
       </div>
 
-      {/* Storage quota widget at sidebar bottom */}
-      <div className="p-4 rounded-2xl bg-vault-bg dark:bg-vault-darkBg border border-vault-border dark:border-vault-darkBorder">
+      {/* Storage Quota Widget at sidebar bottom */}
+      <div className="mt-6 p-4 rounded-2xl bg-vault-bg dark:bg-vault-darkBg border border-vault-border dark:border-vault-darkBorder">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2 text-xs font-semibold text-vault-textPrimary dark:text-vault-darkText">
             <HardDrive className="w-3.5 h-3.5 text-vault-yellowDark dark:text-vault-yellow" />

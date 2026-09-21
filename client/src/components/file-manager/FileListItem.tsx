@@ -74,13 +74,14 @@ export const FileListItem: React.FC<FileListItemProps> = ({
               e.stopPropagation();
               onToggleStar(file);
             }}
-            className="p-1 rounded-md hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors"
+            aria-label={file.isStarred ? 'Remove from starred' : 'Add to starred'}
+            className="p-1.5 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-800 transition-colors flex-shrink-0 active:scale-95"
           >
             <Star
-              className={`w-3.5 h-3.5 ${
+              className={`w-4 h-4 ${
                 file.isStarred
                   ? 'fill-vault-yellow text-vault-yellow'
-                  : 'text-neutral-300 dark:text-neutral-600 group-hover:text-neutral-400'
+                  : 'text-neutral-400 dark:text-neutral-500 hover:text-neutral-600 dark:hover:text-neutral-300'
               }`}
             />
           </button>

@@ -14,6 +14,12 @@ interface ViewStore {
   setSortOrder: (order: 'asc' | 'desc') => void;
   isCommandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
+  isMobileSidebarOpen: boolean;
+  setMobileSidebarOpen: (open: boolean) => void;
+  toggleMobileSidebar: () => void;
+  isMobileSearchOpen: boolean;
+  setMobileSearchOpen: (open: boolean) => void;
+  toggleMobileSearch: () => void;
   refreshVersion: number;
   triggerRefresh: () => void;
 }
@@ -36,6 +42,12 @@ export const useViewStore = create<ViewStore>((set) => ({
   setSortOrder: (sortOrder) => set({ sortOrder }),
   isCommandPaletteOpen: false,
   setCommandPaletteOpen: (open) => set({ isCommandPaletteOpen: open }),
+  isMobileSidebarOpen: false,
+  setMobileSidebarOpen: (open) => set({ isMobileSidebarOpen: open }),
+  toggleMobileSidebar: () => set((state) => ({ isMobileSidebarOpen: !state.isMobileSidebarOpen })),
+  isMobileSearchOpen: false,
+  setMobileSearchOpen: (open) => set({ isMobileSearchOpen: open }),
+  toggleMobileSearch: () => set((state) => ({ isMobileSearchOpen: !state.isMobileSearchOpen })),
   refreshVersion: 0,
   triggerRefresh: () => set((state) => ({ refreshVersion: state.refreshVersion + 1 })),
 }));

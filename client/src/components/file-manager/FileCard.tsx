@@ -68,15 +68,18 @@ export const FileCard: React.FC<FileCardProps> = ({
       className="group relative flex flex-col justify-between p-4 rounded-2xl bg-vault-surface dark:bg-vault-darkSurface border border-vault-border dark:border-vault-darkBorder hover:border-neutral-300 dark:hover:border-neutral-700 shadow-subtle hover:shadow-card transition-all duration-200 select-none cursor-pointer"
     >
       {/* Top row: Star and More button */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2.5">
         {!isTrashView ? (
           <button
             onClick={(e) => {
               e.stopPropagation();
               onToggleStar(file);
             }}
-            className={`p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-vault-darkSurfaceElevated transition-colors ${
-              file.isStarred ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+            aria-label={file.isStarred ? 'Remove from starred' : 'Add to starred'}
+            className={`p-1.5 rounded-xl hover:bg-neutral-100 dark:hover:bg-vault-darkSurfaceElevated transition-all active:scale-95 ${
+              file.isStarred
+                ? 'opacity-100'
+                : 'opacity-40 hover:opacity-100 sm:opacity-0 sm:group-hover:opacity-100'
             }`}
           >
             <Star
@@ -97,7 +100,8 @@ export const FileCard: React.FC<FileCardProps> = ({
               e.stopPropagation();
               setMenuOpen(!menuOpen);
             }}
-            className="p-1.5 rounded-lg opacity-80 group-hover:opacity-100 hover:bg-neutral-100 dark:hover:bg-vault-darkSurfaceElevated text-vault-textSecondary dark:text-vault-darkMuted transition-colors"
+            aria-label="More options"
+            className="p-1.5 rounded-xl opacity-80 group-hover:opacity-100 hover:bg-neutral-100 dark:hover:bg-vault-darkSurfaceElevated text-vault-textSecondary dark:text-vault-darkMuted hover:text-vault-textPrimary transition-colors active:scale-95"
           >
             <MoreVertical className="w-4 h-4" />
           </button>

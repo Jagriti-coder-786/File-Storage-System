@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, NavLink } from 'react-router-dom';
+import { Folder, Clock, Star, Plus, Menu } from 'lucide-react';
 import { Navbar } from '../components/common/Navbar';
 import { Sidebar } from '../components/common/Sidebar';
 import { CommandPalette } from '../components/common/CommandPalette';
@@ -19,9 +20,31 @@ export const AppLayout: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const location = useLocation();
 
-  const { addToQueue, updateProgress, setStatus, queue } = useUploadStore();
+  const { addToQueue, updateProgress, setStatus } = useUploadStore();
+  const {
+    isMobileSidebarOpen,
+    setMobileSidebarOpen,
+    toggleMobileSidebar,
+  } = useViewStore();
   const { success, error } = useToast();
   const { refreshUser } = useAuth();
+
+  // Close mobile drawer when route changes
+  useEffect(() => {
+    setMobileSidebarOpen(false);
+  }, [location.pathname, location.search, setMobileSidebarOpen]);
+
+  // Lock body scroll when mobile drawer is open
+  useEffect(() => {
+    if (isMobileSidebarOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isMobileSidebarOpen]);
 
   // Handle Drag & Drop globally on the window
   useEffect(() => {
@@ -114,7 +137,7 @@ export const AppLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-vault-bg dark:bg-vault-darkBg">
+    <div className="min-h-screen flex flex-col bg-vault-bg dark:bg-vault-darkBg antialiased">
       {/* Hidden file input for manual uploads */}
       <input
         type="file"
@@ -124,20 +147,116 @@ export const AppLayout: React.FC = () => {
         className="hidden"
       />
 
+      {/* Global Top Navigation */}
       <Navbar
         onOpenUpload={handleManualUploadClick}
         onOpenNewFolder={() => setNewFolderOpen(true)}
       />
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar className="hidden md:flex flex-shrink-0" />
+      <div className="flex flex-1 overflow-hidden relative">
+        {/* Desktop Fixed Sidebar */}
+        <Sidebar
+          className="hidden md:flex flex-shrink-0"
+          onOpenUpload={handleManualUploadClick}
+          onOpenNewFolder={() => setNewFolderOpen(true)}
+        />
+
+        {/* Mobile Slide-out Drawer Backdrop */}
+        {isMobileSidebarOpen && (
+          <div
+            onClick={() => setMobileSidebarOpen(false)}
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden animate-in fade-in duration-200"
+            aria-hidden="true"
+          />
+        )}
+
+        {/* Mobile Slide-out Drawer Container */}
+        <div
+          className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[85vw] bg-vault-surface dark:bg-vault-darkSurface shadow-2xl md:hidden transform transition-transform duration-300 ease-in-out flex flex-col ${
+            isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full pointer-events-none'
+          }`}
+        >
+          <Sidebar
+            className="w-full h-full border-r-0"
+            showCloseButton={true}
+            onClose={() => setMobileSidebarOpen(false)}
+            onItemClick={() => setMobileSidebarOpen(false)}
+            onOpenUpload={handleManualUploadClick}
+            onOpenNewFolder={() => setNewFolderOpen(true)}
+          />
+        </div>
 
         {/* Main Content Area */}
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-8 pb-20 md:pb-8 min-w-0">
           <Outlet />
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation Bar */}
+      <nav
+        aria-label="Mobile Navigation"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-vault-surface/95 dark:bg-vault-darkSurface/95 backdrop-blur-lg border-t border-vault-border dark:border-vault-darkBorder px-2 py-1.5 flex items-center justify-around select-none shadow-lg"
+      >
+        <NavLink
+          to="/files"
+          className={({ isActive }) =>
+            `flex flex-col items-center justify-center py-1 px-3 rounded-xl text-[10px] font-semibold transition-colors ${
+              isActive
+                ? 'text-vault-yellowDark dark:text-vault-yellow'
+                : 'text-vault-textSecondary dark:text-vault-darkMuted hover:text-vault-textPrimary'
+            }`
+          }
+        >
+          <Folder className="w-5 h-5 mb-0.5 stroke-[2]" />
+          <span>Files</span>
+        </NavLink>
+
+        <NavLink
+          to="/recent"
+          className={({ isActive }) =>
+            `flex flex-col items-center justify-center py-1 px-3 rounded-xl text-[10px] font-semibold transition-colors ${
+              isActive
+                ? 'text-vault-yellowDark dark:text-vault-yellow'
+                : 'text-vault-textSecondary dark:text-vault-darkMuted hover:text-vault-textPrimary'
+            }`
+          }
+        >
+          <Clock className="w-5 h-5 mb-0.5 stroke-[2]" />
+          <span>Recent</span>
+        </NavLink>
+
+        {/* Center Prominent Upload Action */}
+        <button
+          onClick={handleManualUploadClick}
+          aria-label="Upload File"
+          className="flex items-center justify-center w-11 h-11 -mt-4 rounded-full bg-vault-yellow text-black font-bold shadow-elevated border-2 border-vault-surface dark:border-vault-darkSurface hover:scale-105 active:scale-95 transition-transform"
+        >
+          <Plus className="w-6 h-6 stroke-[2.5]" />
+        </button>
+
+        <NavLink
+          to="/starred"
+          className={({ isActive }) =>
+            `flex flex-col items-center justify-center py-1 px-3 rounded-xl text-[10px] font-semibold transition-colors ${
+              isActive
+                ? 'text-vault-yellowDark dark:text-vault-yellow'
+                : 'text-vault-textSecondary dark:text-vault-darkMuted hover:text-vault-textPrimary'
+            }`
+          }
+        >
+          <Star className="w-5 h-5 mb-0.5 stroke-[2]" />
+          <span>Starred</span>
+        </NavLink>
+
+        <button
+          onClick={toggleMobileSidebar}
+          aria-label="More options"
+          className="flex flex-col items-center justify-center py-1 px-3 rounded-xl text-[10px] font-semibold text-vault-textSecondary dark:text-vault-darkMuted hover:text-vault-textPrimary transition-colors"
+        >
+          <Menu className="w-5 h-5 mb-0.5 stroke-[2]" />
+          <span>More</span>
+        </button>
+      </nav>
 
       {/* Global Utilities */}
       <CommandPalette
@@ -152,7 +271,6 @@ export const AppLayout: React.FC = () => {
         parentId={new URLSearchParams(location.search).get('folder')}
         onClose={() => setNewFolderOpen(false)}
         onCreated={() => {
-          // Trigger a reload event or router update
           window.dispatchEvent(new CustomEvent('folder-created'));
         }}
       />
