@@ -28,12 +28,13 @@ export class CloudinaryStorageProvider implements IStorageProvider {
 
   private getResourceType(key: string, mimeType?: string): 'image' | 'video' | 'raw' {
     if (mimeType) {
-      if (mimeType.startsWith('image/') && !mimeType.includes('pdf')) return 'image';
+      // Cloudinary classifies PDFs as 'image' when uploaded with resource_type: 'auto'
+      if (mimeType.startsWith('image/') || mimeType === 'application/pdf') return 'image';
       if (mimeType.startsWith('video/') || mimeType.startsWith('audio/')) return 'video';
       return 'raw';
     }
     const ext = key.split('.').pop()?.toLowerCase() || '';
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff'].includes(ext)) return 'image';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff', 'pdf'].includes(ext)) return 'image';
     if (['mp4', 'webm', 'mov', 'avi', 'mkv', 'mp3', 'wav', 'ogg', 'm4a', 'flac'].includes(ext)) return 'video';
     return 'raw';
   }
@@ -70,26 +71,42 @@ export class CloudinaryStorageProvider implements IStorageProvider {
 
   async downloadStream(key: string): Promise<Readable> {
     const publicId = this.getPublicId(key);
-    const resourceType = this.getResourceType(key);
-    const url = cloudinary.url(publicId, { resource_type: resourceType, secure: true });
+    const primaryType = this.getResourceType(key);
+    // Try the primary resource type first, then try alternatives
+    const typesToTry: Array<'image' | 'video' | 'raw'> = [primaryType];
+    for (const t of ['image', 'video', 'raw'] as const) {
+      if (!typesToTry.includes(t)) typesToTry.push(t);
+    }
 
-    return new Promise((resolve, reject) => {
-      const fetchWithRedirect = (fetchUrl: string, depth = 0) => {
-        if (depth > 5) return reject(new Error('Too many redirects from Cloudinary'));
-        const client = fetchUrl.startsWith('https') ? https : http;
-        client.get(fetchUrl, (res) => {
-          if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-            return fetchWithRedirect(res.headers.location, depth + 1);
-          }
-          if (res.statusCode && res.statusCode >= 400) {
-            return reject(new Error(`Failed to fetch file from Cloudinary: HTTP ${res.statusCode}`));
-          }
-          resolve(res);
-        }).on('error', (err) => reject(err));
-      };
+    const fetchUrl = (url: string): Promise<Readable> => {
+      return new Promise((resolve, reject) => {
+        const fetchWithRedirect = (fetchUrl: string, depth = 0) => {
+          if (depth > 5) return reject(new Error('Too many redirects from Cloudinary'));
+          const client = fetchUrl.startsWith('https') ? https : http;
+          client.get(fetchUrl, (res) => {
+            if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              return fetchWithRedirect(res.headers.location, depth + 1);
+            }
+            if (res.statusCode && res.statusCode >= 400) {
+              return reject(new Error(`HTTP ${res.statusCode}`));
+            }
+            resolve(res);
+          }).on('error', (err) => reject(err));
+        };
+        fetchWithRedirect(url);
+      });
+    };
 
-      fetchWithRedirect(url);
-    });
+    for (const resType of typesToTry) {
+      const url = cloudinary.url(publicId, { resource_type: resType, secure: true });
+      try {
+        return await fetchUrl(url);
+      } catch {
+        // Try next resource type
+      }
+    }
+
+    throw new Error(`Failed to fetch file from Cloudinary for key: ${key}`);
   }
 
   async delete(key: string): Promise<void> {
@@ -103,9 +120,9 @@ export class CloudinaryStorageProvider implements IStorageProvider {
     }
   }
 
-  async getSignedDownloadUrl(key: string, originalName?: string, _expiresInSeconds: number = 3600, inline: boolean = false): Promise<string> {
+  async getSignedDownloadUrl(key: string, originalName?: string, _expiresInSeconds: number = 3600, inline: boolean = false, mimeType?: string): Promise<string> {
     const publicId = this.getPublicId(key);
-    const resourceType = this.getResourceType(key);
+    const resourceType = this.getResourceType(key, mimeType);
 
     const options: any = {
       resource_type: resourceType,

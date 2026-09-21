@@ -79,10 +79,14 @@ export class LocalStorageProvider implements IStorageProvider {
     }
   }
 
-  async getSignedDownloadUrl(key: string, originalName?: string, expiresInSeconds: number = 3600): Promise<string> {
+  async getSignedDownloadUrl(key: string, originalName?: string, expiresInSeconds: number = 3600, inline: boolean = false, mimeType?: string): Promise<string> {
     // In local mode, return an authenticated internal download route
     const encodedName = originalName ? encodeURIComponent(originalName) : 'file';
-    return `/api/files/raw/${encodeURIComponent(key)}?name=${encodedName}`;
+    const encodedKey = key
+      .split('/')
+      .map((s) => encodeURIComponent(s))
+      .join('/');
+    return `/api/files/raw/${encodedKey}?name=${encodedName}`;
   }
 
   async exists(key: string): Promise<boolean> {

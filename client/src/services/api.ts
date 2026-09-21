@@ -20,7 +20,13 @@ export const getFileRawUrl = (storageKey: string, token?: string | null): string
       ? localStorage.getItem('cloudvault_token')
       : null;
   const query = authToken ? `?token=${encodeURIComponent(authToken)}` : '';
-  return `${API_BASE_URL}/files/raw/${encodeURIComponent(storageKey)}${query}`;
+  // Encode each path segment individually so '/' characters are preserved
+  // for Express wildcard route matching
+  const encodedKey = storageKey
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+  return `${API_BASE_URL}/files/raw/${encodedKey}${query}`;
 };
 
 export const api = axios.create({

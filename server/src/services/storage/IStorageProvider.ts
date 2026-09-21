@@ -25,7 +25,7 @@ export interface IStorageProvider {
   /**
    * Generates a signed or accessible direct URL for downloading/previewing
    */
-  getSignedDownloadUrl(key: string, originalName?: string, expiresInSeconds?: number, inline?: boolean): Promise<string>;
+  getSignedDownloadUrl(key: string, originalName?: string, expiresInSeconds?: number, inline?: boolean, mimeType?: string): Promise<string>;
 
   /**
    * Checks if an object exists in storage

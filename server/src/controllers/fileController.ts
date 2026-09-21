@@ -200,7 +200,7 @@ export const getFileById = async (req: AuthRequest, res: Response, next: NextFun
       throw new AppError('File not found.', 404, 'FILE_NOT_FOUND');
     }
 
-    const previewUrl = await storageProvider.getSignedDownloadUrl(file.storageKey, file.originalName, 3600);
+    const previewUrl = await storageProvider.getSignedDownloadUrl(file.storageKey, file.originalName, 3600, true, file.mimeType);
 
     res.status(200).json({
       success: true,
@@ -295,7 +295,7 @@ export const serveRawFile = async (req: AuthRequest, res: Response, next: NextFu
     // Direct high-performance CDN redirect for Cloudinary
     if (env.STORAGE_PROVIDER === 'cloudinary') {
       try {
-        const directUrl = await storageProvider.getSignedDownloadUrl(file.storageKey, file.originalName, 3600, true);
+        const directUrl = await storageProvider.getSignedDownloadUrl(file.storageKey, file.originalName, 3600, true, file.mimeType);
         if (directUrl) {
           return res.redirect(302, directUrl);
         }

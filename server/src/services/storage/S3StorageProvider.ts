@@ -80,7 +80,7 @@ export class S3StorageProvider implements IStorageProvider {
     await this.s3Client.send(command);
   }
 
-  async getSignedDownloadUrl(key: string, originalName?: string, expiresInSeconds: number = 3600): Promise<string> {
+  async getSignedDownloadUrl(key: string, originalName?: string, expiresInSeconds: number = 3600, inline: boolean = false, mimeType?: string): Promise<string> {
     const disposition = originalName
       ? `inline; filename="${encodeURIComponent(originalName)}"`
       : 'inline';

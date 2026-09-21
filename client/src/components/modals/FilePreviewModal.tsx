@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X,
@@ -35,12 +35,36 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 }) => {
   const [textContent, setTextContent] = useState<string | null>(null);
   const [loadingText, setLoadingText] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   useEffect(() => {
     if (!file) {
       setTextContent(null);
+      setPreviewUrl(null);
       return;
     }
+
+    // Fetch the direct preview URL from the server (Cloudinary CDN URL)
+    // This avoids iframe cross-origin issues with backend redirects
+    setLoadingPreview(true);
+    fileApi
+      .getById(file._id)
+      .then((res) => {
+        const url = res.data?.data?.previewUrl;
+        if (url) {
+          setPreviewUrl(url);
+        } else {
+          // Fallback to raw endpoint
+          setPreviewUrl(getFileRawUrl(file.storageKey));
+        }
+        setLoadingPreview(false);
+      })
+      .catch(() => {
+        // Fallback to raw endpoint
+        setPreviewUrl(getFileRawUrl(file.storageKey));
+        setLoadingPreview(false);
+      });
 
     // If it's a text / code / json / markdown file, fetch its raw content to display
     const isTextReadable =
@@ -54,9 +78,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         file.originalName.endsWith('.js') ||
         file.originalName.endsWith('.ts'));
 
-    const token = localStorage.getItem('cloudvault_token');
     if (isTextReadable) {
       setLoadingText(true);
+      const token = localStorage.getItem('cloudvault_token');
       const url = getFileRawUrl(file.storageKey, token);
       fetch(url, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
@@ -80,17 +104,25 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
   if (!file) return null;
 
-  const token = localStorage.getItem('cloudvault_token');
-  const rawUrl = getFileRawUrl(file.storageKey, token);
+  const effectiveUrl = previewUrl || getFileRawUrl(file.storageKey);
 
   const renderPreviewContent = () => {
+    if (loadingPreview && file.category !== 'document') {
+      return (
+        <div className="w-full h-[40vh] flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-vault-yellow animate-spin" />
+        </div>
+      );
+    }
+
     if (file.category === 'image') {
       return (
         <div className="w-full h-full flex items-center justify-center p-4">
           <img
-            src={rawUrl}
+            src={effectiveUrl}
             alt={file.originalName}
             className="max-h-[65vh] max-w-full rounded-xl object-contain shadow-sm"
+            crossOrigin="anonymous"
           />
         </div>
       );
@@ -99,11 +131,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     if (file.mimeType === 'application/pdf' || file.originalName.endsWith('.pdf')) {
       return (
         <div className="w-full h-[65vh] p-2">
-          <iframe
-            src={rawUrl}
-            title={file.originalName}
-            className="w-full h-full rounded-xl border border-vault-border dark:border-vault-darkBorder bg-white"
-          />
+          {loadingPreview ? (
+            <div className="w-full h-full flex items-center justify-center">
+              <Loader2 className="w-8 h-8 text-vault-yellow animate-spin" />
+            </div>
+          ) : (
+            <iframe
+              src={effectiveUrl}
+              title={file.originalName}
+              className="w-full h-full rounded-xl border border-vault-border dark:border-vault-darkBorder bg-white"
+            />
+          )}
         </div>
       );
     }
@@ -115,8 +153,9 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             controls
             autoPlay
             className="max-h-[65vh] max-w-full rounded-xl shadow-card"
+            crossOrigin="anonymous"
           >
-            <source src={rawUrl} type={file.mimeType} />
+            <source src={effectiveUrl} type={file.mimeType} />
             Your browser does not support video playback.
           </video>
         </div>
@@ -129,8 +168,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shadow-subtle">
             <Music className="w-10 h-10 stroke-[1.8]" />
           </div>
-          <audio controls className="w-full max-w-md">
-            <source src={rawUrl} type={file.mimeType} />
+          <audio controls className="w-full max-w-md" crossOrigin="anonymous">
+            <source src={effectiveUrl} type={file.mimeType} />
             Your browser does not support audio playback.
           </audio>
         </div>

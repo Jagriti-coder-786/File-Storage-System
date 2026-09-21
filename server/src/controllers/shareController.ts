@@ -21,7 +21,7 @@ export const getSharedFile = async (req: Request, res: Response, next: NextFunct
       throw new AppError('This shared link has expired.', 410, 'LINK_EXPIRED');
     }
 
-    const previewUrl = await storageProvider.getSignedDownloadUrl(file.storageKey, file.originalName, 3600);
+    const previewUrl = await storageProvider.getSignedDownloadUrl(file.storageKey, file.originalName, 3600, true, file.mimeType);
 
     res.status(200).json({
       success: true,
