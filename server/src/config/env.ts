@@ -29,11 +29,17 @@ const envSchema = z.object({
   AWS_S3_FORCE_PATH_STYLE: z.union([z.string(), z.boolean()]).optional().default('false').transform((v) => v === true || v === 'true'),
 });
 
-const parsed = envSchema.safeParse(process.env);
-
-if (!parsed.success) {
-  console.error('❌ Invalid environment variables:', JSON.stringify(parsed.error.format(), null, 2));
+let parsedEnv: z.infer<typeof envSchema>;
+try {
+  parsedEnv = envSchema.parse(process.env);
+} catch (error) {
+  if (error instanceof z.ZodError) {
+    console.error('❌ Invalid environment variables:', JSON.stringify(error.format(), null, 2));
+  } else {
+    console.error('❌ Error parsing environment variables:', error);
+  }
   process.exit(1);
 }
 
-export const env = parsed.data;
+export const env = parsedEnv;
+
