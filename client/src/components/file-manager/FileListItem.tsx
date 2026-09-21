@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   FileText,
   Image as ImageIcon,
@@ -43,6 +43,7 @@ export const FileListItem: React.FC<FileListItemProps> = ({
   isTrashView = false,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
 
   const getCategoryIcon = () => {
     switch (file.category) {
@@ -148,6 +149,7 @@ export const FileListItem: React.FC<FileListItemProps> = ({
 
         <div className="relative">
           <button
+            ref={menuBtnRef}
             onClick={(e) => {
               e.stopPropagation();
               setMenuOpen(!menuOpen);
@@ -171,6 +173,7 @@ export const FileListItem: React.FC<FileListItemProps> = ({
             onRestore={onRestore}
             onPermanentDelete={onPermanentDelete}
             isTrashView={isTrashView}
+            anchorRef={menuBtnRef}
           />
         </div>
       </div>

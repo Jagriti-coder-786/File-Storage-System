@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   FileText,
   Image as ImageIcon,
@@ -44,6 +44,7 @@ export const FileCard: React.FC<FileCardProps> = ({
   isTrashView = false,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuBtnRef = useRef<HTMLButtonElement>(null);
 
   const getCategoryIcon = () => {
     switch (file.category) {
@@ -96,6 +97,7 @@ export const FileCard: React.FC<FileCardProps> = ({
 
         <div className="relative">
           <button
+            ref={menuBtnRef}
             onClick={(e) => {
               e.stopPropagation();
               setMenuOpen(!menuOpen);
@@ -120,6 +122,7 @@ export const FileCard: React.FC<FileCardProps> = ({
             onRestore={onRestore}
             onPermanentDelete={onPermanentDelete}
             isTrashView={isTrashView}
+            anchorRef={menuBtnRef}
           />
         </div>
       </div>
