@@ -241,7 +241,12 @@ export const downloadFile = async (req: AuthRequest, res: Response, next: NextFu
     const userId = req.user!.userId;
     const { id } = req.params;
 
-    const file = await File.findOne({ _id: id, ownerId: userId });
+    const query: any = { _id: id };
+    if (req.user?.role !== 'ADMIN') {
+      query.$or = [{ ownerId: userId }, { shareEnabled: true }];
+    }
+
+    const file = await File.findOne(query);
     if (!file) {
       throw new AppError('File not found.', 404, 'FILE_NOT_FOUND');
     }
@@ -257,26 +262,27 @@ export const downloadFile = async (req: AuthRequest, res: Response, next: NextFu
       targetName: file.originalName,
     });
 
-    // For Cloudinary, redirect to a CDN download URL for better performance
-    if (env.STORAGE_PROVIDER === 'cloudinary') {
-      try {
-        const downloadUrl = await storageProvider.getSignedDownloadUrl(
-          file.storageKey, file.originalName, 3600, false, file.mimeType
-        );
-        if (downloadUrl) {
-          return res.redirect(302, downloadUrl);
-        }
-      } catch {
-        // Fall through to stream
-      }
-    }
+    const safeName = file.originalName.replace(/["\r\n\\]/g, '_');
+    const encodedName = encodeURIComponent(file.originalName);
+
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${safeName}"; filename*=UTF-8''${encodedName}`
+    );
+    res.setHeader('Content-Length', file.size);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
 
     const stream = await storageProvider.downloadStream(file.storageKey);
-
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.originalName)}"`);
-    res.setHeader('Content-Type', file.mimeType);
-    res.setHeader('Content-Length', file.size);
-
+    stream.on('error', (err) => {
+      console.error('[downloadFile] Stream error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'File download stream error' });
+      } else {
+        res.end();
+      }
+    });
     stream.pipe(res);
   } catch (error) {
     next(error);
@@ -289,14 +295,19 @@ export const serveRawFile = async (req: AuthRequest, res: Response, next: NextFu
     res.setHeader('Content-Security-Policy', "frame-ancestors *");
     res.removeHeader('X-Frame-Options');
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
 
     const rawKey = req.params.key || req.params[0];
     const decodedKey = decodeURIComponent(typeof rawKey === 'string' ? rawKey : '');
+    const normalizedKey = decodedKey.replace(/\\/g, '/');
+    const baseKey = path.basename(normalizedKey);
 
     const file = await File.findOne({
       $or: [
         { storageKey: decodedKey },
         { storageKey: rawKey },
+        { storageKey: normalizedKey },
+        { storedName: baseKey },
         ...(mongoose.isValidObjectId(decodedKey) ? [{ _id: decodedKey }] : []),
         ...(mongoose.isValidObjectId(rawKey) ? [{ _id: rawKey }] : []),
       ],
@@ -340,24 +351,24 @@ export const serveRawFile = async (req: AuthRequest, res: Response, next: NextFu
       throw new AppError('Access forbidden.', 403, 'FORBIDDEN');
     }
 
-    // Direct high-performance CDN redirect for Cloudinary
-    if (env.STORAGE_PROVIDER === 'cloudinary') {
-      try {
-        const directUrl = await storageProvider.getSignedDownloadUrl(file.storageKey, file.originalName, 3600, true, file.mimeType);
-        if (directUrl) {
-          return res.redirect(302, directUrl);
-        }
-      } catch (redirectErr) {
-        console.warn('Failed generating direct Cloudinary URL, falling back to stream:', redirectErr);
-      }
+    const safeName = file.originalName.replace(/["\r\n\\]/g, '_');
+    const encodedName = encodeURIComponent(file.originalName);
+
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${safeName}"; filename*=UTF-8''${encodedName}`);
+    if (file.size) {
+      res.setHeader('Content-Length', file.size);
     }
 
     const stream = await storageProvider.downloadStream(file.storageKey);
-
-    res.setHeader('Content-Type', file.mimeType);
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(file.originalName)}"`);
-    res.setHeader('Content-Length', file.size);
-
+    stream.on('error', (err) => {
+      console.error('[serveRawFile] Stream error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Stream preview error' });
+      } else {
+        res.end();
+      }
+    });
     stream.pipe(res);
   } catch (error) {
     next(error);

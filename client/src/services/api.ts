@@ -124,32 +124,63 @@ export const fileApi = {
   getById: (id: string) =>
     api.get<{ success: boolean; data: { file: FileItem; previewUrl: string } }>(`/files/${id}`),
   download: async (id: string, originalName?: string) => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('cloudvault_token') : null;
+    const downloadUrl = `${API_BASE_URL}/files/${id}/download`;
+
     try {
       const response = await api.get(`/files/${id}/download`, {
         responseType: 'blob',
       });
-      
+
       let filename = originalName || 'downloaded-file';
       const disposition = response.headers['content-disposition'];
       if (disposition && disposition.indexOf('filename=') !== -1) {
-        const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+        const filenameRegex = /filename\*?=['"]?(?:UTF-\d['"]*)?([^;\r\n"']*)['"]?;?/i;
         const matches = filenameRegex.exec(disposition);
         if (matches != null && matches[1]) {
           filename = decodeURIComponent(matches[1].replace(/['"]/g, ''));
         }
       }
 
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const contentType = typeof response.headers['content-type'] === 'string' ? response.headers['content-type'] : 'application/octet-stream';
+      const blob = new Blob([response.data], {
+        type: contentType,
+      });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
+      link.style.display = 'none';
       link.href = url;
       link.setAttribute('download', filename);
       document.body.appendChild(link);
       link.click();
-      link.parentNode?.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Download failed', error);
-      throw error;
+      setTimeout(() => {
+        link.parentNode?.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 1500);
+    } catch (error: any) {
+      console.warn('Axios blob download failed, falling back to direct browser link:', error);
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const json = JSON.parse(text);
+          if (json.message) {
+            console.error('Download server error:', json.message);
+          }
+        } catch {
+          // ignore
+        }
+      }
+      const query = token ? `?token=${encodeURIComponent(token)}` : '';
+      const fallbackUrl = `${downloadUrl}${query}`;
+      const link = document.createElement('a');
+      link.style.display = 'none';
+      link.href = fallbackUrl;
+      link.setAttribute('download', originalName || 'file');
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        link.parentNode?.removeChild(link);
+      }, 1500);
     }
   },
   rename: (id: string, name: string) =>
@@ -176,7 +207,7 @@ export const fileApi = {
 // Public Sharing Services
 export const publicShareApi = {
   get: (token: string) =>
-    api.get<{
+    axios.get<{
       success: boolean;
       data: {
         id: string;
@@ -189,8 +220,66 @@ export const publicShareApi = {
         expiresAt: string | null;
         previewUrl: string;
       };
-    }>(`/public/share/${token}`),
+    }>(`${API_BASE_URL}/public/share/${token}`),
   getDownloadUrl: (token: string) => `${API_BASE_URL}/public/share/${token}/download`,
+  download: async (token: string, originalName?: string) => {
+    const downloadUrl = `${API_BASE_URL}/public/share/${token}/download`;
+
+    try {
+      // Use clean unauthenticated axios call to avoid sending unnecessary auth header
+      const response = await axios.get(downloadUrl, {
+        responseType: 'blob',
+      });
+
+      let filename = originalName || 'shared-file';
+      const disposition = response.headers['content-disposition'];
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        const filenameRegex = /filename\*?=['"]?(?:UTF-\d['"]*)?([^;\r\n"']*)['"]?;?/i;
+        const matches = filenameRegex.exec(disposition);
+        if (matches != null && matches[1]) {
+          filename = decodeURIComponent(matches[1].replace(/['"]/g, ''));
+        }
+      }
+
+      const contentType = typeof response.headers['content-type'] === 'string' ? response.headers['content-type'] : 'application/octet-stream';
+      const blob = new Blob([response.data], {
+        type: contentType,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.style.display = 'none';
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        link.parentNode?.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 1500);
+    } catch (error: any) {
+      console.warn('Axios blob public download failed, falling back to direct browser link:', error);
+      if (error?.response?.data instanceof Blob) {
+        try {
+          const text = await error.response.data.text();
+          const json = JSON.parse(text);
+          if (json.message) {
+            console.error('Public download error:', json.message);
+          }
+        } catch {
+          // ignore
+        }
+      }
+      const link = document.createElement('a');
+      link.style.display = 'none';
+      link.href = downloadUrl;
+      link.setAttribute('download', originalName || 'file');
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        link.parentNode?.removeChild(link);
+      }, 1500);
+    }
+  },
 };
 
 // Storage Services

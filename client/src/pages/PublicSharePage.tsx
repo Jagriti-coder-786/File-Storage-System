@@ -15,7 +15,7 @@ import {
   AlertCircle,
   Loader2,
 } from 'lucide-react';
-import { publicShareApi } from '../services/api';
+import { publicShareApi, API_BASE_URL } from '../services/api';
 import { formatBytes, formatDate } from '../utils/format';
 import { modalScale } from '../animations/variants';
 
@@ -24,6 +24,7 @@ export const PublicSharePage: React.FC = () => {
   const [file, setFile] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -40,9 +41,15 @@ export const PublicSharePage: React.FC = () => {
       .finally(() => setLoading(false));
   }, [token]);
 
-  const handleDownload = () => {
-    if (token) {
-      window.open(publicShareApi.getDownloadUrl(token), '_blank');
+  const handleDownload = async () => {
+    if (!token) return;
+    try {
+      setDownloading(true);
+      await publicShareApi.download(token, file?.name);
+    } catch (err) {
+      console.error('Download error:', err);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -126,7 +133,11 @@ export const PublicSharePage: React.FC = () => {
             <div className="p-8 flex flex-col items-center justify-center text-center bg-vault-bg/40 dark:bg-vault-darkBg/40">
               {file.category === 'image' && file.previewUrl ? (
                 <img
-                  src={file.previewUrl}
+                  src={
+                    file.previewUrl.startsWith('http://') || file.previewUrl.startsWith('https://')
+                      ? file.previewUrl
+                      : `${API_BASE_URL.replace(/\/api\/?$/, '')}${file.previewUrl.startsWith('/') ? '' : '/'}${file.previewUrl}`
+                  }
                   alt={file.name}
                   className="max-h-64 max-w-full rounded-2xl object-contain shadow-sm mb-4"
                 />
@@ -175,10 +186,20 @@ export const PublicSharePage: React.FC = () => {
 
               <button
                 onClick={handleDownload}
-                className="w-full mt-4 flex items-center justify-center gap-2 py-3 rounded-2xl bg-vault-yellow hover:bg-vault-yellowHover text-black font-extrabold text-xs shadow-card transition-all transform active:scale-95"
+                disabled={downloading}
+                className="w-full mt-4 flex items-center justify-center gap-2 py-3 rounded-2xl bg-vault-yellow hover:bg-vault-yellowHover disabled:opacity-50 disabled:cursor-not-allowed text-black font-extrabold text-xs shadow-card transition-all transform active:scale-95"
               >
-                <Download className="w-4 h-4 stroke-[2.2]" />
-                <span>Download File ({formatBytes(file.size)})</span>
+                {downloading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Preparing Download...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4 stroke-[2.2]" />
+                    <span>Download File ({formatBytes(file.size)})</span>
+                  </>
+                )}
               </button>
             </div>
           </motion.div>

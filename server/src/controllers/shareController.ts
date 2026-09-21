@@ -63,12 +63,27 @@ export const downloadSharedFile = async (req: Request, res: Response, next: Next
     file.downloadCount += 1;
     await file.save();
 
-    const stream = await storageProvider.downloadStream(file.storageKey);
+    const safeName = file.originalName.replace(/["\r\n\\]/g, '_');
+    const encodedName = encodeURIComponent(file.originalName);
 
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.originalName)}"`);
-    res.setHeader('Content-Type', file.mimeType);
+    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${safeName}"; filename*=UTF-8''${encodedName}`
+    );
     res.setHeader('Content-Length', file.size);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition, Content-Length');
 
+    const stream = await storageProvider.downloadStream(file.storageKey);
+    stream.on('error', (err) => {
+      console.error('[downloadSharedFile] Stream error:', err);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: 'Shared file stream error' });
+      } else {
+        res.end();
+      }
+    });
     stream.pipe(res);
   } catch (error) {
     next(error);

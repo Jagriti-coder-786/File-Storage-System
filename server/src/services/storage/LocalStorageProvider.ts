@@ -62,17 +62,25 @@ export class LocalStorageProvider implements IStorageProvider {
 
   async downloadStream(key: string): Promise<Readable> {
     const targetPath = this.getFilePath(key);
-    if (!fs.existsSync(targetPath)) {
-      throw new Error(`File not found in local storage: ${key}`);
+    if (fs.existsSync(targetPath)) {
+      return fs.createReadStream(targetPath);
     }
-    return fs.createReadStream(targetPath);
+    const basenamePath = path.join(this.baseDir, path.basename(key));
+    if (fs.existsSync(basenamePath)) {
+      return fs.createReadStream(basenamePath);
+    }
+    throw new Error(`File not found in local storage: ${key}`);
   }
 
   async delete(key: string): Promise<void> {
     const targetPath = this.getFilePath(key);
+    const basenamePath = path.join(this.baseDir, path.basename(key));
     try {
       if (fs.existsSync(targetPath)) {
         await fs.promises.unlink(targetPath);
+      }
+      if (fs.existsSync(basenamePath) && basenamePath !== targetPath) {
+        await fs.promises.unlink(basenamePath);
       }
     } catch (err) {
       console.error(`Failed to delete local file ${key}:`, err);
@@ -91,6 +99,8 @@ export class LocalStorageProvider implements IStorageProvider {
 
   async exists(key: string): Promise<boolean> {
     const targetPath = this.getFilePath(key);
-    return fs.existsSync(targetPath);
+    if (fs.existsSync(targetPath)) return true;
+    const basenamePath = path.join(this.baseDir, path.basename(key));
+    return fs.existsSync(basenamePath);
   }
 }
