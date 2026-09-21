@@ -16,7 +16,7 @@ import {
 import { FileItem } from '../../types';
 import { formatBytes, formatDate } from '../../utils/format';
 import { modalScale } from '../../animations/variants';
-import { fileApi } from '../../services/api';
+import { fileApi, getFileRawUrl } from '../../services/api';
 
 interface FilePreviewModalProps {
   file: FileItem | null;
@@ -57,7 +57,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     const token = localStorage.getItem('cloudvault_token');
     if (isTextReadable) {
       setLoadingText(true);
-      const url = `/api/files/raw/${encodeURIComponent(file.storageKey)}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+      const url = getFileRawUrl(file.storageKey, token);
       fetch(url, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       })
@@ -81,7 +81,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   if (!file) return null;
 
   const token = localStorage.getItem('cloudvault_token');
-  const rawUrl = `/api/files/raw/${encodeURIComponent(file.storageKey)}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
+  const rawUrl = getFileRawUrl(file.storageKey, token);
 
   const renderPreviewContent = () => {
     if (file.category === 'image') {

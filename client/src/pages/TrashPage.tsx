@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Trash2, RotateCcw, AlertTriangle, Loader2 } from 'lucide-react';
 import { fileApi } from '../services/api';
+import { apiCache } from '../services/apiCache';
 import { FileCard } from '../components/file-manager/FileCard';
 import { EmptyState } from '../components/common/EmptyState';
 import { DeleteConfirmModal } from '../components/modals/DeleteConfirmModal';
@@ -13,19 +14,32 @@ export const TrashPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [deleteItem, setDeleteItem] = useState<FileItem | null>(null);
   const [emptyTrashConfirm, setEmptyTrashConfirm] = useState(false);
+  const [permanentLoading, setPermanentLoading] = useState(false);
+  const [emptyLoading, setEmptyLoading] = useState(false);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
 
   const { success, error } = useToast();
   const { refreshUser } = useAuth();
 
-  const loadTrash = useCallback(async () => {
-    try {
+  const loadTrash = useCallback(async (silent = false) => {
+    const cached = apiCache.get<FileItem[]>('trash_files');
+    if (cached) {
+      setFiles(cached);
+      setLoading(false);
+    } else if (!silent) {
       setLoading(true);
+    }
+
+    try {
       const res = await fileApi.getAll({ isDeleted: true });
       if (res.data.success) {
         setFiles(res.data.data.files);
+        apiCache.set('trash_files', res.data.data.files);
       }
     } catch {
-      error('Failed to load trash.');
+      if (!cached) {
+        error('Failed to load trash.');
+      }
     } finally {
       setLoading(false);
     }
@@ -37,40 +51,53 @@ export const TrashPage: React.FC = () => {
 
   const handleRestore = async (file: FileItem) => {
     try {
+      setRestoringId(file._id);
       const res = await fileApi.restore(file._id);
       if (res.data.success) {
         setFiles((prev) => prev.filter((f) => f._id !== file._id));
+        apiCache.invalidate('trash_files');
+        apiCache.invalidate('files');
         success(`Restored "${file.originalName}".`);
       }
     } catch {
       error('Failed to restore file.');
+    } finally {
+      setRestoringId(null);
     }
   };
 
   const handlePermanentDelete = async () => {
     if (!deleteItem) return;
     try {
+      setPermanentLoading(true);
       await fileApi.permanentDelete(deleteItem._id);
       setFiles((prev) => prev.filter((f) => f._id !== deleteItem._id));
+      apiCache.invalidate('trash_files');
+      apiCache.invalidate('files');
       success(`Permanently deleted "${deleteItem.originalName}".`);
       setDeleteItem(null);
       refreshUser();
     } catch {
       error('Failed to delete file permanently.');
+    } finally {
+      setPermanentLoading(false);
     }
   };
 
   const handleEmptyTrash = async () => {
     try {
-      for (const file of files) {
-        await fileApi.permanentDelete(file._id);
-      }
+      setEmptyLoading(true);
+      await Promise.all(files.map((file) => fileApi.permanentDelete(file._id)));
       setFiles([]);
+      apiCache.invalidate('trash_files');
+      apiCache.invalidate('files');
       setEmptyTrashConfirm(false);
       success('Trash emptied successfully.');
       refreshUser();
     } catch {
       error('Failed to completely empty trash.');
+    } finally {
+      setEmptyLoading(false);
     }
   };
 
@@ -140,6 +167,7 @@ export const TrashPage: React.FC = () => {
         description={`This action cannot be undone. "${deleteItem?.originalName}" will be erased from storage.`}
         confirmLabel="Delete Permanently"
         isPermanent={true}
+        loading={permanentLoading}
         onClose={() => setDeleteItem(null)}
         onConfirm={handlePermanentDelete}
       />
@@ -151,6 +179,7 @@ export const TrashPage: React.FC = () => {
         description={`Are you sure you want to permanently delete all ${files.length} items? This action cannot be undone.`}
         confirmLabel="Empty Trash"
         isPermanent={true}
+        loading={emptyLoading}
         onClose={() => setEmptyTrashConfirm(false)}
         onConfirm={handleEmptyTrash}
       />

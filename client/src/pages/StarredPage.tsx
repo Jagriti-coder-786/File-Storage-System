@@ -9,10 +9,12 @@ import { DeleteConfirmModal } from '../components/modals/DeleteConfirmModal';
 import { fileApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { FileItem } from '../types';
+import { apiCache } from '../services/apiCache';
 
 export const StarredPage: React.FC = () => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [shareFile, setShareFile] = useState<FileItem | null>(null);
@@ -21,15 +23,25 @@ export const StarredPage: React.FC = () => {
 
   const { success, error } = useToast();
 
-  const loadStarred = useCallback(async () => {
-    try {
+  const loadStarred = useCallback(async (silent = false) => {
+    const cached = apiCache.get<FileItem[]>('starred_files');
+    if (cached) {
+      setFiles(cached);
+      setLoading(false);
+    } else if (!silent) {
       setLoading(true);
+    }
+
+    try {
       const res = await fileApi.getAll({ isStarred: true });
       if (res.data.success) {
         setFiles(res.data.data.files);
+        apiCache.set('starred_files', res.data.data.files);
       }
     } catch {
-      error('Failed to load starred files.');
+      if (!cached) {
+        error('Failed to load starred files.');
+      }
     } finally {
       setLoading(false);
     }
@@ -44,6 +56,8 @@ export const StarredPage: React.FC = () => {
       const res = await fileApi.toggleStar(file._id);
       if (res.data.success) {
         setFiles((prev) => prev.filter((f) => f._id !== file._id));
+        apiCache.invalidate('starred_files');
+        apiCache.invalidate('files');
         success('Removed from starred.');
       }
     } catch {
@@ -54,12 +68,17 @@ export const StarredPage: React.FC = () => {
   const handleDeleteConfirm = async () => {
     if (!deleteItem) return;
     try {
+      setActionLoading(true);
       await fileApi.delete(deleteItem.item._id);
       setFiles((prev) => prev.filter((f) => f._id !== deleteItem.item._id));
+      apiCache.invalidate('starred_files');
+      apiCache.invalidate('files');
       success('File moved to trash.');
       setDeleteItem(null);
     } catch {
       error('Delete failed.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -139,6 +158,7 @@ export const StarredPage: React.FC = () => {
         title="Move file to trash?"
         description={`"${deleteItem?.item.originalName}" will be moved to trash.`}
         confirmLabel="Move to Trash"
+        loading={actionLoading}
         onClose={() => setDeleteItem(null)}
         onConfirm={handleDeleteConfirm}
       />

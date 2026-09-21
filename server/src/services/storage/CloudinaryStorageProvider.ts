@@ -22,16 +22,29 @@ export class CloudinaryStorageProvider implements IStorageProvider {
   }
 
   private getPublicId(key: string): string {
-    return key.replace(/\.[^/.]+$/, ''); // Remove extension for public_id
+    const cleanKey = key.replace(/\.[^/.]+$/, ''); // Remove extension
+    return cleanKey.startsWith('cloudvault/') ? cleanKey : `cloudvault/${cleanKey}`;
+  }
+
+  private getResourceType(key: string, mimeType?: string): 'image' | 'video' | 'raw' {
+    if (mimeType) {
+      if (mimeType.startsWith('image/') && !mimeType.includes('pdf')) return 'image';
+      if (mimeType.startsWith('video/') || mimeType.startsWith('audio/')) return 'video';
+      return 'raw';
+    }
+    const ext = key.split('.').pop()?.toLowerCase() || '';
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'tiff'].includes(ext)) return 'image';
+    if (['mp4', 'webm', 'mov', 'avi', 'mkv', 'mp3', 'wav', 'ogg', 'm4a', 'flac'].includes(ext)) return 'video';
+    return 'raw';
   }
 
   async upload(key: string, data: Buffer | Readable, mimeType: string): Promise<UploadResult> {
-    const publicId = this.getPublicId(key);
+    const rawPublicId = key.replace(/\.[^/.]+$/, '');
 
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
-          public_id: publicId,
+          public_id: rawPublicId,
           resource_type: 'auto',
           folder: 'cloudvault',
         },
@@ -56,41 +69,63 @@ export class CloudinaryStorageProvider implements IStorageProvider {
   }
 
   async downloadStream(key: string): Promise<Readable> {
-    const url = cloudinary.url(key, { resource_type: 'auto', secure: true });
+    const publicId = this.getPublicId(key);
+    const resourceType = this.getResourceType(key);
+    const url = cloudinary.url(publicId, { resource_type: resourceType, secure: true });
 
     return new Promise((resolve, reject) => {
-      const client = url.startsWith('https') ? https : http;
-      client.get(url, (res) => {
-        if (res.statusCode && res.statusCode >= 400) {
-          return reject(new Error(`Failed to fetch file from Cloudinary: HTTP ${res.statusCode}`));
-        }
-        resolve(res);
-      }).on('error', (err) => reject(err));
+      const fetchWithRedirect = (fetchUrl: string, depth = 0) => {
+        if (depth > 5) return reject(new Error('Too many redirects from Cloudinary'));
+        const client = fetchUrl.startsWith('https') ? https : http;
+        client.get(fetchUrl, (res) => {
+          if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            return fetchWithRedirect(res.headers.location, depth + 1);
+          }
+          if (res.statusCode && res.statusCode >= 400) {
+            return reject(new Error(`Failed to fetch file from Cloudinary: HTTP ${res.statusCode}`));
+          }
+          resolve(res);
+        }).on('error', (err) => reject(err));
+      };
+
+      fetchWithRedirect(url);
     });
   }
 
   async delete(key: string): Promise<void> {
+    const publicId = this.getPublicId(key);
     try {
-      // Attempt image/video or raw resource deletion
-      await cloudinary.uploader.destroy(key, { resource_type: 'image' });
-      await cloudinary.uploader.destroy(key, { resource_type: 'raw' });
-      await cloudinary.uploader.destroy(key, { resource_type: 'video' });
+      await cloudinary.uploader.destroy(publicId, { resource_type: 'image' });
+      await cloudinary.uploader.destroy(publicId, { resource_type: 'raw' });
+      await cloudinary.uploader.destroy(publicId, { resource_type: 'video' });
     } catch (err) {
-      console.error(`Failed to delete from Cloudinary: ${key}`, err);
+      console.error(`Failed to delete from Cloudinary: ${publicId}`, err);
     }
   }
 
-  async getSignedDownloadUrl(key: string, _originalName?: string, _expiresInSeconds: number = 3600): Promise<string> {
-    return cloudinary.url(key, {
-      resource_type: 'auto',
+  async getSignedDownloadUrl(key: string, originalName?: string, _expiresInSeconds: number = 3600, inline: boolean = false): Promise<string> {
+    const publicId = this.getPublicId(key);
+    const resourceType = this.getResourceType(key);
+
+    const options: any = {
+      resource_type: resourceType,
       secure: true,
-      flags: 'attachment',
-    });
+    };
+
+    if (!inline) {
+      options.flags = 'attachment';
+      if (originalName) {
+        options.attachment = originalName;
+      }
+    }
+
+    return cloudinary.url(publicId, options);
   }
 
   async exists(key: string): Promise<boolean> {
+    const publicId = this.getPublicId(key);
     try {
-      const res = await cloudinary.api.resource(key, { resource_type: 'auto' });
+      const res = await cloudinary.api.resource(publicId, { resource_type: 'auto' });
       return !!res;
     } catch {
       return false;

@@ -14,6 +14,7 @@ import {
 import { FileItem } from '../../types';
 import { formatBytes, formatDate } from '../../utils/format';
 import { FileContextMenu } from './FileContextMenu';
+import { getFileRawUrl } from '../../services/api';
 
 interface FileCardProps {
   file: FileItem;
@@ -126,7 +127,7 @@ export const FileCard: React.FC<FileCardProps> = ({
       >
         {file.category === 'image' && file.mimeType !== 'image/svg+xml' ? (
           <img
-            src={`/api/files/raw/${encodeURIComponent(file.storageKey)}${localStorage.getItem('cloudvault_token') ? `?token=${encodeURIComponent(localStorage.getItem('cloudvault_token')!)}` : ''}`}
+            src={getFileRawUrl(file.storageKey)}
             alt={file.originalName}
             className="w-full h-full object-cover"
             loading="lazy"

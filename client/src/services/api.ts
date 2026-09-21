@@ -10,7 +10,18 @@ if (rawBaseUrl.startsWith('http') && !rawBaseUrl.endsWith('/api')) {
   rawBaseUrl = `${rawBaseUrl}/api`;
 }
 
-const API_BASE_URL = rawBaseUrl;
+export const API_BASE_URL = rawBaseUrl;
+
+export const getFileRawUrl = (storageKey: string, token?: string | null): string => {
+  const authToken =
+    token !== undefined
+      ? token
+      : typeof window !== 'undefined'
+      ? localStorage.getItem('cloudvault_token')
+      : null;
+  const query = authToken ? `?token=${encodeURIComponent(authToken)}` : '';
+  return `${API_BASE_URL}/files/raw/${encodeURIComponent(storageKey)}${query}`;
+};
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

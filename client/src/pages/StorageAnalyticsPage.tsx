@@ -15,6 +15,7 @@ import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip } from 'recharts';
 import { storageApi } from '../services/api';
 import { formatBytes } from '../utils/format';
 import { StorageSummary } from '../types';
+import { apiCache } from '../services/apiCache';
 
 const CATEGORY_COLORS = {
   documents: '#F5C542', // Warm Yellow
@@ -26,16 +27,22 @@ const CATEGORY_COLORS = {
 };
 
 export const StorageAnalyticsPage: React.FC = () => {
-  const [summary, setSummary] = useState<StorageSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState<StorageSummary | null>(() => apiCache.get<StorageSummary>('storage_summary'));
+  const [loading, setLoading] = useState(!summary);
 
   useEffect(() => {
     const fetchStorage = async () => {
+      const cached = apiCache.get<StorageSummary>('storage_summary');
+      if (cached) {
+        setSummary(cached);
+        setLoading(false);
+      }
+
       try {
-        setLoading(true);
         const res = await storageApi.getSummary();
         if (res.data.success) {
           setSummary(res.data.data);
+          apiCache.set('storage_summary', res.data.data);
         }
       } catch (err) {
         console.error('Failed to load storage summary', err);

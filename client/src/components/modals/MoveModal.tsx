@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { X, FolderInput, Folder, Check } from 'lucide-react';
+import { X, FolderInput, Folder, Check, Loader2 } from 'lucide-react';
 import { modalScale } from '../../animations/variants';
 import { fileApi, folderApi } from '../../services/api';
 import { useToast } from '../../context/ToastContext';
@@ -144,9 +144,16 @@ export const MoveModal: React.FC<MoveModalProps> = ({
             type="button"
             onClick={handleMove}
             disabled={loading}
-            className="px-5 py-2 text-xs font-bold rounded-xl bg-vault-yellow hover:bg-vault-yellowHover text-black shadow-subtle transition-all transform active:scale-95 disabled:opacity-50"
+            className="flex items-center justify-center gap-2 px-5 py-2 text-xs font-bold rounded-xl bg-vault-yellow hover:bg-vault-yellowHover text-black shadow-subtle transition-all transform active:scale-95 disabled:opacity-50 cursor-pointer"
           >
-            {loading ? 'Moving...' : 'Move Here'}
+            {loading ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Moving...</span>
+              </>
+            ) : (
+              <span>Move Here</span>
+            )}
           </button>
         </div>
       </motion.div>

@@ -25,6 +25,8 @@ import { fileApi, folderApi } from '../services/api';
 import { useToast } from '../context/ToastContext';
 import { FileItem, FolderItem, FileCategory } from '../types';
 
+import { apiCache } from '../services/apiCache';
+
 export const MyFilesPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const folderId = searchParams.get('folder');
@@ -46,6 +48,7 @@ export const MyFilesPage: React.FC = () => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [breadcrumbs, setBreadcrumbs] = useState<Array<{ id: string | null; name: string }>>([]);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(false);
 
   // Modals state
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
@@ -57,10 +60,20 @@ export const MyFilesPage: React.FC = () => {
 
   const { success, error } = useToast();
 
-  const loadData = useCallback(async () => {
-    try {
-      setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    const cacheKey = `files_${folderId || 'root'}_${searchQuery}_${categoryFilter}_${sortBy}_${sortOrder}`;
+    const cached = apiCache.get<{ folders: FolderItem[]; files: FileItem[]; breadcrumbs: any[] }>(cacheKey);
 
+    if (cached) {
+      setFolders(cached.folders);
+      setFiles(cached.files);
+      setBreadcrumbs(cached.breadcrumbs);
+      setLoading(false);
+    } else if (!silent) {
+      setLoading(true);
+    }
+
+    try {
       const [foldersRes, filesRes] = await Promise.all([
         folderApi.getAll(folderId || 'root'),
         fileApi.getAll({
@@ -72,25 +85,31 @@ export const MyFilesPage: React.FC = () => {
         }),
       ]);
 
-      if (foldersRes.data.success) {
-        setFolders(foldersRes.data.data);
-      }
-
-      if (filesRes.data.success) {
-        setFiles(filesRes.data.data.files);
-      }
-
-      // If viewing a subfolder, load breadcrumb path
+      let loadedBreadcrumbs: any[] = [];
       if (folderId) {
         const folderDetail = await folderApi.getById(folderId);
         if (folderDetail.data.success) {
-          setBreadcrumbs(folderDetail.data.data.breadcrumbs);
+          loadedBreadcrumbs = folderDetail.data.data.breadcrumbs;
         }
-      } else {
-        setBreadcrumbs([]);
+      }
+
+      if (foldersRes.data.success && filesRes.data.success) {
+        const newFolders = foldersRes.data.data;
+        const newFiles = filesRes.data.data.files;
+        setFolders(newFolders);
+        setFiles(newFiles);
+        setBreadcrumbs(loadedBreadcrumbs);
+
+        apiCache.set(cacheKey, {
+          folders: newFolders,
+          files: newFiles,
+          breadcrumbs: loadedBreadcrumbs,
+        });
       }
     } catch (err: any) {
-      error('Failed to load files and folders.');
+      if (!cached) {
+        error('Failed to load files and folders.');
+      }
     } finally {
       setLoading(false);
     }
@@ -102,7 +121,11 @@ export const MyFilesPage: React.FC = () => {
 
   // Listen for global custom events like 'folder-created'
   useEffect(() => {
-    const handleRefresh = () => loadData();
+    const handleRefresh = () => {
+      apiCache.invalidate('files');
+      apiCache.invalidate('folders');
+      loadData(true);
+    };
     window.addEventListener('folder-created', handleRefresh);
     return () => window.removeEventListener('folder-created', handleRefresh);
   }, [loadData]);
@@ -122,6 +145,7 @@ export const MyFilesPage: React.FC = () => {
         setFiles((prev) =>
           prev.map((f) => (f._id === file._id ? { ...f, isStarred: res.data.data.isStarred } : f))
         );
+        apiCache.invalidate('files');
         success(res.data.data.isStarred ? 'Added to starred' : 'Removed from starred');
       }
     } catch {
@@ -132,6 +156,7 @@ export const MyFilesPage: React.FC = () => {
   const handleDeleteConfirm = async () => {
     if (!deleteItem) return;
     try {
+      setActionLoading(true);
       if (deleteItem.type === 'file') {
         await fileApi.delete(deleteItem.item._id);
         setFiles((prev) => prev.filter((f) => f._id !== deleteItem.item._id));
@@ -141,9 +166,13 @@ export const MyFilesPage: React.FC = () => {
         setFolders((prev) => prev.filter((f) => f._id !== deleteItem.item._id));
         success('Folder and contents moved to trash.');
       }
+      apiCache.invalidate('files');
+      apiCache.invalidate('folders');
       setDeleteItem(null);
     } catch {
       error('Delete failed.');
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -353,6 +382,7 @@ export const MyFilesPage: React.FC = () => {
             : deleteItem?.item.name
         }" will be moved to Trash. You can restore it anytime.`}
         confirmLabel="Move to Trash"
+        loading={actionLoading}
         onClose={() => setDeleteItem(null)}
         onConfirm={handleDeleteConfirm}
       />

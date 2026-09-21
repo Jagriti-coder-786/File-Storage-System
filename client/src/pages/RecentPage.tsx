@@ -7,6 +7,7 @@ import { FilePreviewModal } from '../components/modals/FilePreviewModal';
 import { ShareModal } from '../components/modals/ShareModal';
 import { FileItem, ActivityItem } from '../types';
 import { formatDate } from '../utils/format';
+import { apiCache } from '../services/apiCache';
 
 export const RecentPage: React.FC = () => {
   const [files, setFiles] = useState<FileItem[]>([]);
@@ -18,18 +19,25 @@ export const RecentPage: React.FC = () => {
 
   useEffect(() => {
     const fetchRecent = async () => {
+      const cached = apiCache.get<{ files: FileItem[]; activities: ActivityItem[] }>('recent_data');
+      if (cached) {
+        setFiles(cached.files);
+        setActivities(cached.activities);
+        setLoading(false);
+      }
+
       try {
-        setLoading(true);
         const [filesRes, activitiesRes] = await Promise.all([
           fileApi.getAll({ sortBy: 'createdAt', sortOrder: 'desc', limit: 10 }),
           storageApi.getActivities(20),
         ]);
 
-        if (filesRes.data.success) {
-          setFiles(filesRes.data.data.files);
-        }
-        if (activitiesRes.data.success) {
-          setActivities(activitiesRes.data.data);
+        if (filesRes.data.success && activitiesRes.data.success) {
+          const newFiles = filesRes.data.data.files;
+          const newActs = activitiesRes.data.data;
+          setFiles(newFiles);
+          setActivities(newActs);
+          apiCache.set('recent_data', { files: newFiles, activities: newActs });
         }
       } catch (err) {
         console.error('Failed to load recent data', err);

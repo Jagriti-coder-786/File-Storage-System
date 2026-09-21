@@ -13,6 +13,7 @@ import { generateSecureToken, verifyToken } from '../utils/token';
 import { sanitizeFilename } from '../utils/formatters';
 import { renameFileSchema, moveFileSchema, shareFileSchema } from '../validators';
 import { AppError } from '../middleware/errorHandler';
+import { env } from '../config/env';
 
 export const uploadFiles = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -289,6 +290,18 @@ export const serveRawFile = async (req: AuthRequest, res: Response, next: NextFu
 
     if (!isAuthorized) {
       throw new AppError('Access forbidden.', 403, 'FORBIDDEN');
+    }
+
+    // Direct high-performance CDN redirect for Cloudinary
+    if (env.STORAGE_PROVIDER === 'cloudinary') {
+      try {
+        const directUrl = await storageProvider.getSignedDownloadUrl(file.storageKey, file.originalName, 3600, true);
+        if (directUrl) {
+          return res.redirect(302, directUrl);
+        }
+      } catch (redirectErr) {
+        console.warn('Failed generating direct Cloudinary URL, falling back to stream:', redirectErr);
+      }
     }
 
     const stream = await storageProvider.downloadStream(file.storageKey);
