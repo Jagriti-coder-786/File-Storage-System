@@ -4,10 +4,13 @@ import { env } from './env';
 export const connectDatabase = async (): Promise<void> => {
   try {
     mongoose.set('strictQuery', true);
-    await mongoose.connect(env.MONGODB_URI);
-    console.log(`✅ MongoDB connected successfully to ${env.MONGODB_URI}`);
-  } catch (error) {
-    console.error('❌ MongoDB connection error:', error);
+    await mongoose.connect(env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 10000,
+    });
+    console.log(`✅ MongoDB connected successfully`);
+  } catch (error: any) {
+    console.error('❌ MongoDB connection error:', error.message || error);
+    console.error('💡 Tip: Ensure your MongoDB Atlas Network Access includes 0.0.0.0/0 (Allow Access from Anywhere).');
     process.exit(1);
   }
 
