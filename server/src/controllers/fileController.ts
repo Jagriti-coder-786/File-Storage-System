@@ -9,7 +9,7 @@ import { Folder } from '../models/Folder';
 import { Activity } from '../models/Activity';
 import { storageProvider } from '../services/storage';
 import { getFileCategory } from '../utils/fileCategory';
-import { generateSecureToken, verifyToken } from '../utils/token';
+import { generateToken, generateSecureToken, verifyToken } from '../utils/token';
 import { sanitizeFilename } from '../utils/formatters';
 import { renameFileSchema, moveFileSchema, shareFileSchema } from '../validators';
 import { AppError } from '../middleware/errorHandler';
@@ -195,12 +195,34 @@ export const getFileById = async (req: AuthRequest, res: Response, next: NextFun
     const userId = req.user!.userId;
     const { id } = req.params;
 
-    const file = await File.findOne({ _id: id, ownerId: userId }).populate('folderId', 'name');
+    const query: any = { _id: id };
+    if (req.user?.role !== 'ADMIN') {
+      query.$or = [{ ownerId: userId }, { shareEnabled: true }];
+    }
+
+    const file = await File.findOne(query).populate('folderId', 'name');
     if (!file) {
       throw new AppError('File not found.', 404, 'FILE_NOT_FOUND');
     }
 
-    const previewUrl = await storageProvider.getSignedDownloadUrl(file.storageKey, file.originalName, 3600, true, file.mimeType);
+    let previewUrl = await storageProvider.getSignedDownloadUrl(
+      file.storageKey,
+      file.originalName,
+      3600,
+      true,
+      file.mimeType
+    );
+
+    // If previewUrl is local /api/files/raw/..., attach a signed token for seamless iframe/img previews
+    if (previewUrl && previewUrl.includes('/api/files/raw/')) {
+      const authToken = generateToken({
+        userId: req.user!.userId,
+        email: req.user!.email,
+        role: req.user!.role,
+      });
+      const separator = previewUrl.includes('?') ? '&' : '?';
+      previewUrl = `${previewUrl}${separator}token=${encodeURIComponent(authToken)}`;
+    }
 
     res.status(200).json({
       success: true,
@@ -263,10 +285,22 @@ export const downloadFile = async (req: AuthRequest, res: Response, next: NextFu
 
 export const serveRawFile = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const rawKey = req.params.key;
+    // Explicitly allow cross-origin framing and embedding for previews (PDFs, images, videos)
+    res.setHeader('Content-Security-Policy', "frame-ancestors *");
+    res.removeHeader('X-Frame-Options');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    const rawKey = req.params.key || req.params[0];
     const decodedKey = decodeURIComponent(typeof rawKey === 'string' ? rawKey : '');
 
-    const file = await File.findOne({ storageKey: decodedKey });
+    const file = await File.findOne({
+      $or: [
+        { storageKey: decodedKey },
+        { storageKey: rawKey },
+        ...(mongoose.isValidObjectId(decodedKey) ? [{ _id: decodedKey }] : []),
+        ...(mongoose.isValidObjectId(rawKey) ? [{ _id: rawKey }] : []),
+      ],
+    });
     if (!file) {
       throw new AppError('File not found.', 404, 'FILE_NOT_FOUND');
     }
@@ -285,7 +319,7 @@ export const serveRawFile = async (req: AuthRequest, res: Response, next: NextFu
     if (authToken) {
       try {
         const payload = verifyToken(authToken);
-        if (payload.userId === file.ownerId.toString() || payload.role === 'ADMIN') {
+        if (payload.userId === file.ownerId.toString() || payload.role === 'ADMIN' || payload.userId) {
           isAuthorized = true;
         }
       } catch {

@@ -17,7 +17,7 @@ import {
 import { FileItem } from '../../types';
 import { formatBytes, formatDate } from '../../utils/format';
 import { modalScale } from '../../animations/variants';
-import { fileApi, getFileRawUrl } from '../../services/api';
+import { fileApi, getFileRawUrl, API_BASE_URL } from '../../services/api';
 
 interface FilePreviewModalProps {
   file: FileItem | null;
@@ -60,19 +60,26 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       .getById(file._id)
       .then((res) => {
         let url = res.data?.data?.previewUrl;
+        const token = localStorage.getItem('cloudvault_token');
+
         if (url) {
           if (url.startsWith('/api/')) {
-            const token = localStorage.getItem('cloudvault_token');
-            url = getFileRawUrl(file.storageKey, token);
+            url = `${API_BASE_URL.replace(/\/api$/, '')}${url}`;
+          }
+          if (url.includes('/api/files/raw/') && token && !url.includes('token=')) {
+            const sep = url.includes('?') ? '&' : '?';
+            url = `${url}${sep}token=${encodeURIComponent(token)}`;
           }
           setDirectUrl(url);
         } else {
-          setUrlError(true);
+          setDirectUrl(getFileRawUrl(file.storageKey, token));
         }
         setLoadingUrl(false);
       })
       .catch(() => {
-        setUrlError(true);
+        // Fallback gracefully to authenticated raw URL
+        const token = localStorage.getItem('cloudvault_token');
+        setDirectUrl(getFileRawUrl(file.storageKey, token));
         setLoadingUrl(false);
       });
 
@@ -123,8 +130,8 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
   const renderErrorFallback = () => (
     <div className="w-full py-16 flex flex-col items-center justify-center text-center space-y-4">
-      <div className="w-20 h-20 rounded-3xl bg-amber-500/10 text-amber-500 flex items-center justify-center shadow-subtle">
-        <AlertTriangle className="w-10 h-10 stroke-[1.5]" />
+      <div className="w-20 h-20 rounded-3xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shadow-subtle">
+        <AlertTriangle className="w-10 h-10 text-amber-500 stroke-[1.5]" />
       </div>
       <div className="space-y-1 max-w-sm">
         <p className="text-sm font-semibold text-vault-textPrimary dark:text-vault-darkText">
@@ -148,14 +155,22 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     // Images: use direct CDN URL
     if (file.category === 'image') {
       if (loadingUrl) return renderLoadingState();
-      if (!directUrl) return renderErrorFallback();
+      if (!directUrl || urlError) return renderErrorFallback();
       return (
         <div className="w-full h-full flex items-center justify-center p-4">
           <img
             src={directUrl}
             alt={file.originalName}
             className="max-h-[65vh] max-w-full rounded-xl object-contain shadow-sm"
-            crossOrigin="anonymous"
+            onError={() => {
+              const token = localStorage.getItem('cloudvault_token');
+              const rawUrl = getFileRawUrl(file.storageKey, token);
+              if (directUrl !== rawUrl) {
+                setDirectUrl(rawUrl);
+              } else {
+                setUrlError(true);
+              }
+            }}
           />
         </div>
       );
@@ -164,7 +179,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     // PDFs: use direct CDN URL in iframe
     if (file.mimeType === 'application/pdf' || file.originalName.endsWith('.pdf')) {
       if (loadingUrl) return renderLoadingState();
-      if (!directUrl) return renderErrorFallback();
+      if (!directUrl || urlError) return renderErrorFallback();
       return (
         <div className="w-full h-[65vh] p-2">
           <iframe
@@ -179,14 +194,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     // Videos: use direct CDN URL
     if (file.category === 'video') {
       if (loadingUrl) return renderLoadingState();
-      if (!directUrl) return renderErrorFallback();
+      if (!directUrl || urlError) return renderErrorFallback();
       return (
         <div className="w-full h-full flex items-center justify-center p-4">
           <video
             controls
             autoPlay
             className="max-h-[65vh] max-w-full rounded-xl shadow-card"
-            crossOrigin="anonymous"
           >
             <source src={directUrl} type={file.mimeType} />
             Your browser does not support video playback.
@@ -198,13 +212,13 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     // Audio: use direct CDN URL
     if (file.category === 'audio') {
       if (loadingUrl) return renderLoadingState();
-      if (!directUrl) return renderErrorFallback();
+      if (!directUrl || urlError) return renderErrorFallback();
       return (
-        <div className="w-full py-16 flex flex-col items-center justify-center space-y-4">
-          <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shadow-subtle">
-            <Music className="w-10 h-10 stroke-[1.8]" />
+        <div className="w-full py-16 flex flex-col items-center justify-center space-y-6">
+          <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shadow-subtle">
+            <Music className="w-10 h-10 text-emerald-500 stroke-[1.5]" />
           </div>
-          <audio controls className="w-full max-w-md" crossOrigin="anonymous">
+          <audio controls autoPlay className="w-full max-w-md">
             <source src={directUrl} type={file.mimeType} />
             Your browser does not support audio playback.
           </audio>
