@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   Eye,
   Download,
@@ -43,6 +43,20 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   isTrashView = false,
 }) => {
   const menuRef = useRef<HTMLDivElement>(null);
+  const [openUpward, setOpenUpward] = useState(false);
+
+  // Detect if the menu would overflow the viewport bottom and flip upward
+  useEffect(() => {
+    if (isOpen && menuRef.current) {
+      const rect = menuRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      if (rect.bottom > viewportHeight - 16) {
+        setOpenUpward(true);
+      } else {
+        setOpenUpward(false);
+      }
+    }
+  }, [isOpen]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -61,7 +75,9 @@ export const FileContextMenu: React.FC<FileContextMenuProps> = ({
   return (
     <div
       ref={menuRef}
-      className="absolute right-0 top-8 z-30 w-48 p-1.5 bg-vault-surface dark:bg-vault-darkSurface border border-vault-border dark:border-vault-darkBorder rounded-2xl shadow-elevated text-xs animate-in fade-in zoom-in-95"
+      className={`absolute right-0 z-30 w-48 p-1.5 bg-vault-surface dark:bg-vault-darkSurface border border-vault-border dark:border-vault-darkBorder rounded-2xl shadow-elevated text-xs animate-in fade-in zoom-in-95 max-h-[70vh] overflow-y-auto ${
+        openUpward ? 'bottom-8' : 'top-8'
+      }`}
     >
       {isTrashView ? (
         <>

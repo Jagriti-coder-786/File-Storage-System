@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   X,
@@ -13,6 +13,8 @@ import {
   Loader2,
   ExternalLink,
   AlertTriangle,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { FileItem } from '../../types';
 import { formatBytes, formatDate } from '../../utils/format';
@@ -40,6 +42,39 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const [directUrl, setDirectUrl] = useState<string | null>(null);
   const [loadingUrl, setLoadingUrl] = useState(false);
   const [urlError, setUrlError] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const modalContainerRef = useRef<HTMLDivElement>(null);
+
+  const toggleFullscreen = useCallback(() => {
+    if (!isFullscreen) {
+      const el = modalContainerRef.current;
+      if (el && el.requestFullscreen) {
+        el.requestFullscreen().catch(() => {
+          // Fullscreen API not supported, use CSS-only fallback
+          setIsFullscreen(true);
+        });
+      } else {
+        setIsFullscreen(true);
+      }
+    } else {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {
+          setIsFullscreen(false);
+        });
+      } else {
+        setIsFullscreen(false);
+      }
+    }
+  }, [isFullscreen]);
+
+  // Sync state when exiting fullscreen via Escape or browser controls
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
 
   useEffect(() => {
     if (!file) {
@@ -121,6 +156,10 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
   if (!file) return null;
 
+  const contentMaxH = isFullscreen ? 'h-[calc(100vh-64px)]' : 'max-h-[65vh]';
+  const containerMaxH = isFullscreen ? 'h-[calc(100vh-64px)]' : 'h-[65vh]';
+  const textContainerH = isFullscreen ? 'h-[calc(100vh-64px)]' : 'h-[60vh]';
+
   const renderLoadingState = () => (
     <div className="w-full h-[40vh] flex flex-col items-center justify-center gap-3">
       <Loader2 className="w-8 h-8 text-vault-yellow animate-spin" />
@@ -161,7 +200,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           <img
             src={directUrl}
             alt={file.originalName}
-            className="max-h-[65vh] max-w-full rounded-xl object-contain shadow-sm"
+            className={`${contentMaxH} max-w-full rounded-xl object-contain shadow-sm`}
             onError={() => {
               const token = localStorage.getItem('cloudvault_token');
               const rawUrl = getFileRawUrl(file.storageKey, token);
@@ -181,7 +220,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       if (loadingUrl) return renderLoadingState();
       if (!directUrl || urlError) return renderErrorFallback();
       return (
-        <div className="w-full h-[65vh] p-2">
+        <div className={`w-full ${containerMaxH} p-2`}>
           <iframe
             src={directUrl}
             title={file.originalName}
@@ -200,7 +239,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
           <video
             controls
             autoPlay
-            className="max-h-[65vh] max-w-full rounded-xl shadow-card"
+            className={`${contentMaxH} max-w-full rounded-xl shadow-card`}
           >
             <source src={directUrl} type={file.mimeType} />
             Your browser does not support video playback.
@@ -229,7 +268,7 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     // Text-based documents
     if (textContent !== null || loadingText) {
       return (
-        <div className="w-full h-[60vh] p-4">
+        <div className={`w-full ${textContainerH} p-4`}>
           {loadingText ? (
             renderLoadingState()
           ) : (
@@ -267,7 +306,12 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+    <div
+      ref={modalContainerRef}
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm ${
+        isFullscreen ? 'p-0' : 'p-4'
+      }`}
+    >
       <div className="fixed inset-0" onClick={onClose} />
 
       <motion.div
@@ -275,10 +319,14 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         initial="hidden"
         animate="visible"
         exit="exit"
-        className="relative w-full max-w-4xl bg-vault-surface dark:bg-vault-darkSurface border border-vault-border dark:border-vault-darkBorder rounded-3xl shadow-elevated overflow-hidden z-10 flex flex-col max-h-[90vh]"
+        className={`relative bg-vault-surface dark:bg-vault-darkSurface border border-vault-border dark:border-vault-darkBorder shadow-elevated overflow-hidden z-10 flex flex-col ${
+          isFullscreen
+            ? 'w-screen h-screen max-w-none max-h-none rounded-none'
+            : 'w-full max-w-4xl rounded-3xl max-h-[90vh]'
+        }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-vault-border dark:border-vault-darkBorder bg-vault-bg/50 dark:bg-vault-darkBg/50">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-vault-border dark:border-vault-darkBorder bg-vault-bg/50 dark:bg-vault-darkBg/50 flex-shrink-0">
           <div className="flex items-center gap-3 min-w-0 flex-1 mr-4">
             <div className="p-2 rounded-xl bg-vault-yellow/20 text-vault-yellowDark dark:text-vault-yellow flex-shrink-0">
               <FileText className="w-4 h-4" />
@@ -322,6 +370,17 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               <Download className="w-4 h-4" />
             </button>
             <button
+              onClick={toggleFullscreen}
+              className="p-2 rounded-xl border border-vault-border dark:border-vault-darkBorder hover:bg-neutral-100 dark:hover:bg-vault-darkSurfaceElevated text-vault-textSecondary dark:text-vault-darkMuted transition-colors"
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="w-4 h-4" />
+              ) : (
+                <Maximize2 className="w-4 h-4" />
+              )}
+            </button>
+            <button
               onClick={onClose}
               className="p-2 rounded-xl hover:bg-neutral-100 dark:hover:bg-vault-darkSurfaceElevated text-vault-textSecondary dark:text-vault-darkMuted hover:text-vault-textPrimary dark:hover:text-vault-darkText transition-colors"
             >
@@ -338,3 +397,4 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     </div>
   );
 };
+
