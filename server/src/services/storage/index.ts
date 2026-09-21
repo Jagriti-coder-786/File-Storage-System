@@ -45,15 +45,15 @@ class ResilientStorageProvider implements IStorageProvider {
     await this.fallback.delete(key);
   }
 
-  async getSignedDownloadUrl(key: string, originalName?: string, expiresInSeconds?: number) {
+  async getSignedDownloadUrl(key: string, originalName?: string, expiresInSeconds?: number, inline?: boolean, mimeType?: string) {
     try {
       if (await this.primary.exists(key)) {
-        return await this.primary.getSignedDownloadUrl(key, originalName, expiresInSeconds);
+        return await this.primary.getSignedDownloadUrl(key, originalName, expiresInSeconds, inline, mimeType);
       }
     } catch (err) {
       // fallback
     }
-    return await this.fallback.getSignedDownloadUrl(key, originalName, expiresInSeconds);
+    return await this.fallback.getSignedDownloadUrl(key, originalName, expiresInSeconds, inline, mimeType);
   }
 
   async exists(key: string) {

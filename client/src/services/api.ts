@@ -123,10 +123,34 @@ export const fileApi = {
     }>('/files', { params }),
   getById: (id: string) =>
     api.get<{ success: boolean; data: { file: FileItem; previewUrl: string } }>(`/files/${id}`),
-  download: (id: string) => {
-    const token = localStorage.getItem('cloudvault_token');
-    const query = token ? `?token=${encodeURIComponent(token)}` : '';
-    window.open(`${API_BASE_URL}/files/${id}/download${query}`, '_blank');
+  download: async (id: string, originalName?: string) => {
+    try {
+      const response = await api.get(`/files/${id}/download`, {
+        responseType: 'blob',
+      });
+      
+      let filename = originalName || 'downloaded-file';
+      const disposition = response.headers['content-disposition'];
+      if (disposition && disposition.indexOf('filename=') !== -1) {
+        const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+        const matches = filenameRegex.exec(disposition);
+        if (matches != null && matches[1]) {
+          filename = decodeURIComponent(matches[1].replace(/['"]/g, ''));
+        }
+      }
+
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download failed', error);
+      throw error;
+    }
   },
   rename: (id: string, name: string) =>
     api.patch<{ success: boolean; data: FileItem; message: string }>(`/files/${id}/rename`, { name }),

@@ -59,8 +59,12 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     fileApi
       .getById(file._id)
       .then((res) => {
-        const url = res.data?.data?.previewUrl;
+        let url = res.data?.data?.previewUrl;
         if (url) {
+          if (url.startsWith('/api/')) {
+            const token = localStorage.getItem('cloudvault_token');
+            url = getFileRawUrl(file.storageKey, token);
+          }
           setDirectUrl(url);
         } else {
           setUrlError(true);

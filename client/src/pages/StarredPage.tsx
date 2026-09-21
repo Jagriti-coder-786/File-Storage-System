@@ -115,7 +115,7 @@ export const StarredPage: React.FC = () => {
               key={file._id}
               file={file}
               onPreview={(f) => setPreviewFile(f)}
-              onDownload={(f) => fileApi.download(f._id)}
+              onDownload={(f) => fileApi.download(f._id, f.originalName)}
               onToggleStar={handleToggleStar}
               onShare={(f) => setShareFile(f)}
               onRename={(f) => setRenameItem({ item: f, type: 'file' })}
@@ -130,7 +130,7 @@ export const StarredPage: React.FC = () => {
       <FilePreviewModal
         file={previewFile}
         onClose={() => setPreviewFile(null)}
-        onDownload={(f) => fileApi.download(f._id)}
+        onDownload={(f) => fileApi.download(f._id, f.originalName)}
         onShare={(f) => setShareFile(f)}
         onToggleStar={handleToggleStar}
       />
