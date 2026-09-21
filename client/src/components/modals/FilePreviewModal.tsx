@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import {
   X,
   Download,
@@ -12,6 +12,7 @@ import {
   File,
   Loader2,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 import { FileItem } from '../../types';
 import { formatBytes, formatDate } from '../../utils/format';
@@ -35,38 +36,43 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 }) => {
   const [textContent, setTextContent] = useState<string | null>(null);
   const [loadingText, setLoadingText] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(false);
+  // Direct CDN URL from the server (Cloudinary / S3 / etc.)
+  const [directUrl, setDirectUrl] = useState<string | null>(null);
+  const [loadingUrl, setLoadingUrl] = useState(false);
+  const [urlError, setUrlError] = useState(false);
 
   useEffect(() => {
     if (!file) {
       setTextContent(null);
-      setPreviewUrl(null);
+      setDirectUrl(null);
+      setUrlError(false);
       return;
     }
 
-    // Fetch the direct preview URL from the server (Cloudinary CDN URL)
-    // This avoids iframe cross-origin issues with backend redirects
-    setLoadingPreview(true);
+    // Fetch the direct CDN preview URL from the server
+    // This gives us a Cloudinary/S3 URL that can be directly embedded
+    // WITHOUT routing through the backend (which causes iframe issues)
+    setLoadingUrl(true);
+    setUrlError(false);
+    setDirectUrl(null);
+
     fileApi
       .getById(file._id)
       .then((res) => {
         const url = res.data?.data?.previewUrl;
         if (url) {
-          setPreviewUrl(url);
+          setDirectUrl(url);
         } else {
-          // Fallback to raw endpoint
-          setPreviewUrl(getFileRawUrl(file.storageKey));
+          setUrlError(true);
         }
-        setLoadingPreview(false);
+        setLoadingUrl(false);
       })
       .catch(() => {
-        // Fallback to raw endpoint
-        setPreviewUrl(getFileRawUrl(file.storageKey));
-        setLoadingPreview(false);
+        setUrlError(true);
+        setLoadingUrl(false);
       });
 
-    // If it's a text / code / json / markdown file, fetch its raw content to display
+    // If it's a text / code / json / markdown file, fetch raw content
     const isTextReadable =
       file.category === 'document' &&
       (file.mimeType.includes('text') ||
@@ -104,22 +110,45 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
 
   if (!file) return null;
 
-  const effectiveUrl = previewUrl || getFileRawUrl(file.storageKey);
+  const renderLoadingState = () => (
+    <div className="w-full h-[40vh] flex flex-col items-center justify-center gap-3">
+      <Loader2 className="w-8 h-8 text-vault-yellow animate-spin" />
+      <p className="text-xs text-vault-textSecondary dark:text-vault-darkMuted">Loading preview…</p>
+    </div>
+  );
+
+  const renderErrorFallback = () => (
+    <div className="w-full py-16 flex flex-col items-center justify-center text-center space-y-4">
+      <div className="w-20 h-20 rounded-3xl bg-amber-500/10 text-amber-500 flex items-center justify-center shadow-subtle">
+        <AlertTriangle className="w-10 h-10 stroke-[1.5]" />
+      </div>
+      <div className="space-y-1 max-w-sm">
+        <p className="text-sm font-semibold text-vault-textPrimary dark:text-vault-darkText">
+          Preview unavailable
+        </p>
+        <p className="text-xs text-vault-textSecondary dark:text-vault-darkMuted">
+          Unable to generate preview for this file. Download it to view locally.
+        </p>
+      </div>
+      <button
+        onClick={() => onDownload(file)}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-vault-yellow hover:bg-vault-yellowHover text-black font-bold text-xs shadow-subtle transition-transform active:scale-95"
+      >
+        <Download className="w-4 h-4 stroke-[2.2]" />
+        <span>Download File</span>
+      </button>
+    </div>
+  );
 
   const renderPreviewContent = () => {
-    if (loadingPreview && file.category !== 'document') {
-      return (
-        <div className="w-full h-[40vh] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 text-vault-yellow animate-spin" />
-        </div>
-      );
-    }
-
+    // Images: use direct CDN URL
     if (file.category === 'image') {
+      if (loadingUrl) return renderLoadingState();
+      if (!directUrl) return renderErrorFallback();
       return (
         <div className="w-full h-full flex items-center justify-center p-4">
           <img
-            src={effectiveUrl}
+            src={directUrl}
             alt={file.originalName}
             className="max-h-[65vh] max-w-full rounded-xl object-contain shadow-sm"
             crossOrigin="anonymous"
@@ -128,25 +157,25 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       );
     }
 
+    // PDFs: use direct CDN URL in iframe
     if (file.mimeType === 'application/pdf' || file.originalName.endsWith('.pdf')) {
+      if (loadingUrl) return renderLoadingState();
+      if (!directUrl) return renderErrorFallback();
       return (
         <div className="w-full h-[65vh] p-2">
-          {loadingPreview ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <Loader2 className="w-8 h-8 text-vault-yellow animate-spin" />
-            </div>
-          ) : (
-            <iframe
-              src={effectiveUrl}
-              title={file.originalName}
-              className="w-full h-full rounded-xl border border-vault-border dark:border-vault-darkBorder bg-white"
-            />
-          )}
+          <iframe
+            src={directUrl}
+            title={file.originalName}
+            className="w-full h-full rounded-xl border border-vault-border dark:border-vault-darkBorder bg-white"
+          />
         </div>
       );
     }
 
+    // Videos: use direct CDN URL
     if (file.category === 'video') {
+      if (loadingUrl) return renderLoadingState();
+      if (!directUrl) return renderErrorFallback();
       return (
         <div className="w-full h-full flex items-center justify-center p-4">
           <video
@@ -155,34 +184,36 @@ export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             className="max-h-[65vh] max-w-full rounded-xl shadow-card"
             crossOrigin="anonymous"
           >
-            <source src={effectiveUrl} type={file.mimeType} />
+            <source src={directUrl} type={file.mimeType} />
             Your browser does not support video playback.
           </video>
         </div>
       );
     }
 
+    // Audio: use direct CDN URL
     if (file.category === 'audio') {
+      if (loadingUrl) return renderLoadingState();
+      if (!directUrl) return renderErrorFallback();
       return (
         <div className="w-full py-16 flex flex-col items-center justify-center space-y-4">
           <div className="w-20 h-20 rounded-3xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center shadow-subtle">
             <Music className="w-10 h-10 stroke-[1.8]" />
           </div>
           <audio controls className="w-full max-w-md" crossOrigin="anonymous">
-            <source src={effectiveUrl} type={file.mimeType} />
+            <source src={directUrl} type={file.mimeType} />
             Your browser does not support audio playback.
           </audio>
         </div>
       );
     }
 
+    // Text-based documents
     if (textContent !== null || loadingText) {
       return (
         <div className="w-full h-[60vh] p-4">
           {loadingText ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <Loader2 className="w-8 h-8 text-vault-yellow animate-spin" />
-            </div>
+            renderLoadingState()
           ) : (
             <pre className="w-full h-full p-4 rounded-xl bg-neutral-900 text-neutral-100 font-mono text-xs overflow-auto leading-relaxed border border-neutral-800 selection:bg-vault-yellow selection:text-black">
               {textContent}
