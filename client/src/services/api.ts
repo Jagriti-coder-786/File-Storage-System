@@ -124,7 +124,9 @@ export const fileApi = {
   getById: (id: string) =>
     api.get<{ success: boolean; data: { file: FileItem; previewUrl: string } }>(`/files/${id}`),
   download: (id: string) => {
-    window.open(`${API_BASE_URL}/files/${id}/download`, '_blank');
+    const token = localStorage.getItem('cloudvault_token');
+    const query = token ? `?token=${encodeURIComponent(token)}` : '';
+    window.open(`${API_BASE_URL}/files/${id}/download${query}`, '_blank');
   },
   rename: (id: string, name: string) =>
     api.patch<{ success: boolean; data: FileItem; message: string }>(`/files/${id}/rename`, { name }),

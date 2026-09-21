@@ -235,6 +235,20 @@ export const downloadFile = async (req: AuthRequest, res: Response, next: NextFu
       targetName: file.originalName,
     });
 
+    // For Cloudinary, redirect to a CDN download URL for better performance
+    if (env.STORAGE_PROVIDER === 'cloudinary') {
+      try {
+        const downloadUrl = await storageProvider.getSignedDownloadUrl(
+          file.storageKey, file.originalName, 3600, false, file.mimeType
+        );
+        if (downloadUrl) {
+          return res.redirect(302, downloadUrl);
+        }
+      } catch {
+        // Fall through to stream
+      }
+    }
+
     const stream = await storageProvider.downloadStream(file.storageKey);
 
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.originalName)}"`);

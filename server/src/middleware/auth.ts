@@ -9,8 +9,19 @@ export const authenticateJwt = async (
   next: NextFunction
 ): Promise<void> => {
   try {
+    // Accept token from Authorization header or ?token= query parameter
+    // Query param is needed for window.open() calls (e.g. file downloads)
+    // which cannot set custom headers
+    let token: string | undefined;
+
     const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      token = authHeader.split(' ')[1];
+    } else if (typeof req.query.token === 'string' && req.query.token) {
+      token = req.query.token;
+    }
+
+    if (!token) {
       res.status(401).json({
         success: false,
         message: 'Authentication required. Missing or malformed token.',
@@ -19,7 +30,6 @@ export const authenticateJwt = async (
       return;
     }
 
-    const token = authHeader.split(' ')[1];
     const payload = verifyToken(token);
 
     // Verify user still exists and is active
